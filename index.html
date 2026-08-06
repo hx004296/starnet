@@ -5880,7 +5880,7 @@ function runBootAnimation() {
 }
 
 // ==================== 初始化 ====================
-async function initApp() {
+async function _baseInitApp() {
   try {
   // 注入预置论坛数据
   if (!loadData(LS_KEYS.threads, null)) {
@@ -6107,7 +6107,7 @@ function showAgreement() {
 }
 
 // ==================== 进入主应用 ====================
-async function enterMainApp() {
+async function _baseEnterMainApp() {
   // 从 Supabase session 获取用户信息
   let userInfo = null;
   let username = STATE.currentUser;
@@ -9650,7 +9650,7 @@ function setLocalData(key, data) {
 // 在原系统初始化时注入预置数据，确保新旧数据兼容
 
 // 保存原始initApp引用
-const _originalInitApp = typeof initApp === 'function' ? initApp : function(){};
+const _originalInitApp = typeof _baseInitApp === 'function' ? _baseInitApp : function(){};
 
 // 重写initApp：先注入预置数据，再调用原逻辑，补充Supabase增强
 async function initApp() {
@@ -9934,7 +9934,7 @@ function doLogout() {
 
 
 // ==================== 增强：重写enterMainApp，增加搜索和设置按钮 ====================
-const _originalEnterMainApp = typeof enterMainApp === 'function' ? enterMainApp : function(){};
+const _originalEnterMainApp = typeof _baseEnterMainApp === 'function' ? _baseEnterMainApp : function(){};
 
 function enterMainApp() {
   _originalEnterMainApp.call(this);
