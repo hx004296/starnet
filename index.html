@@ -18194,6 +18194,12 @@ toggleFriend = function(id) {
 
         </div>
 
+        <div class="nav-item" data-nav="military" onclick="navigateTo('military')">
+
+          <svg class="icon"><use href="#icon-faction-military"></use></svg><span>军部</span>
+
+        </div>
+
 
 
       </div>
@@ -21214,6 +21220,14 @@ function renderPage(navId, param) {
     case 'friends':
 
       if (typeof renderFriendsPage === 'function') renderFriendsPage();
+
+      else renderForumPage();
+
+      break;
+
+    case 'military':
+
+      if (typeof renderMilitaryPage === 'function') renderMilitaryPage();
 
       else renderForumPage();
 
@@ -40433,6 +40447,571 @@ renderFactionChannelMessages = function() {
 
 
 // ============================================================
+// 新增功能三：四大军团 + 三大军校
+// ============================================================
+
+// ---------- 四大军团数据 ----------
+var MILITARY_LEGIONS = [
+  {
+    id: 'shatter_star',
+    name: '帝国碎星军团',
+    nickname: '钢铁洪流',
+    theater: '东部战区',
+    theaterDesc: '破碎星环带与巨型陨石群交错，地形崎岖，战线拉锯',
+    size: '约120万人',
+    structure: '下设四个集团军',
+    specialty: '重装甲单位和定向能武器见长，擅长正面碾压',
+    equipment: '幽浮结晶驱动巨型机甲、轨道炮阵列',
+    motto: '碎星断铁，不退半步',
+    color: '#cc4444',
+    colorDim: 'rgba(204,68,68,0.15)',
+    icon: '⚔',
+    enemyType: '集群型异种——数量庞大，擅长集团冲锋和人海战术',
+    tactics: '阵地战、防御战、消耗战。重火力覆盖和防线推进',
+    description: '碎星军团是帝国体量最大的军团，驻守东部战区"钢铁洪流"。在破碎星环带与陨石群之间，他们用重装甲和定向能武器筑起一道永不后退的钢铁防线。这里的每一颗陨石上都刻着阵亡者的名字——军团传统：新兵入伍第一课，就是在纪念碑前默哀三分钟。'
+  },
+  {
+    id: 'ghost_tide',
+    name: '帝国幽潮军团',
+    nickname: '蠕行深渊',
+    theater: '西部战区',
+    theaterDesc: '菌毯覆盖，腐蚀性孢云弥漫，视线受阻、通讯干扰严重',
+    size: '约45万人',
+    structure: '下设四个特种联队',
+    specialty: '全员具备异能或高阶侦察素养，接受"抗拟态"心理训练',
+    equipment: '生物感应器、孢云过滤器、灵魂印记武器',
+    motto: '幽潮无声，吞噬一切',
+    color: '#44cc88',
+    colorDim: 'rgba(68,204,136,0.15)',
+    icon: '👁',
+    enemyType: '拟态、潜伏、寄身型异种——能伪装成人类信号、废弃舰船、同伴求救',
+    tactics: '侦察与反侦察、渗透与反渗透、猎杀与反猎杀',
+    description: '幽潮军团是帝国最精锐的特种作战力量，驻守西部战区"蠕行深渊"。这里的敌人不是看得见的怪物——它们可能是你的战友、你的通讯器、甚至你的影子。每一个幽潮士兵都要经受"抗拟态"心理训练，学会在最信任的同伴回头微笑时，判断那是不是它的脸。'
+  },
+  {
+    id: 'holy_rose',
+    name: '帝国圣蔷薇军团',
+    nickname: '绯红雨林',
+    theater: '南部战区',
+    theaterDesc: '重力紊乱、空间折叠、极端温差，赤红植被分泌腐蚀汁液',
+    size: '约80万人',
+    structure: '下设四个集团军',
+    specialty: '火焰系异能者和焚烧兵器为主力，"焚尽一切，始得新生"',
+    equipment: '等离子焚化炮、火焰喷射器、热能护盾、极端温区特种动力甲',
+    motto: '荆棘之上，蔷薇盛开',
+    color: '#ff6644',
+    colorDim: 'rgba(255,102,68,0.15)',
+    icon: '🔥',
+    enemyType: '再生力极强的异种——能在熔岩与冰层间自由切换形态',
+    tactics: '焦土战术——定期焚烧整片战区阻止异种筑巢和进化',
+    description: '圣蔷薇军团驻守南部战区"绯红雨林"，这里的作战方式极为残酷——焦土战术。定期焚烧整片战区，将一切夷为平地，然后在灰烬中等待异种"重生"并再次焚烧。士兵们戏称自己是园丁，只不过修剪的不是花枝，而是整片大地。'
+  },
+  {
+    id: 'silver_cross',
+    name: '帝国银十字军团',
+    nickname: '寂静回响',
+    theater: '北部战区',
+    theaterDesc: '废弃舰船坟场，重力异常密布，通讯中断，局部时间流速异常',
+    size: '约55万人',
+    structure: '下设四个联队',
+    specialty: '全员佩戴"银十字护符"——精神锚定装置，铁律：永远不单独行动',
+    equipment: '时间稳定器、精神护盾发生器、灵魂共鸣感应器',
+    motto: '银辉之下，灵魂不孤',
+    color: '#8899cc',
+    colorDim: 'rgba(136,153,204,0.15)',
+    icon: '✝',
+    enemyType: '精神型异种——模仿死者声音、复现旧日幻象、操纵时间流速',
+    tactics: '心理战与精神防御。三人以上组队以精神力互相"锚定"',
+    description: '银十字军团驻守北部战区"寂静回响"，这里是帝国最恐怖的战场。敌人不摧毁你的身体——它摧毁你的理智。死者的呼唤、逝去时光的幻象、时间循环的陷阱……银十字士兵唯一的防线，是胸前的银十字护符和身边战友的呼吸声。铁律只有一条：永远不单独行动。'
+  }
+];
+
+// ---------- 三大军校数据 ----------
+var MILITARY_ACADEMIES = [
+  {
+    id: 'crimson_iron',
+    name: '帝国赤铁第一军校',
+    nickname: '将星摇篮',
+    aka: '赤铁圣堂',
+    established: '帝国历17年',
+    motto: '铁血即荣光，战死即封爵',
+    source: '上城区贵族子弟、军部勋贵后代、各阵营高层推荐的天才异能者',
+    duration: '四年制，毕业后授少尉军衔',
+    goal: '高级指挥官、战帅后备',
+    training: '高阶定制化异能训练',
+    elimination: '六成（以退学计）',
+    status: '帝国精英',
+    courses: '异能战斗理论与实战应用、异种解剖学与等级识别、幽浮能量学与执念结晶应用、星际战术指挥与兵团调度、帝国政治结构与阵营关系、战争史与战例研究',
+    trial: '每年一次"血月试炼"——学员以小队形式进入战区边缘，独立完成一次B级以上异种猎杀。失败者直接退学，伤亡不计入统计。',
+    culture: '极端精英主义，决斗文化盛行。"赤铁系"是帝国政坛不可忽视的隐性权力集团',
+    color: '#cc3333',
+    colorDim: 'rgba(204,51,51,0.12)',
+    icon: '🎖',
+    requirement: '上城区世袭贵族家庭每代必须至少送一名子弟入学；每年军部情报司在全帝国范围内筛查12至16岁、异能潜力评级A级以上的少年，强制征召入学。入学初试淘汰率约六成。正式学员中，毕业率不足四成。'
+  },
+  {
+    id: 'anvil',
+    name: '帝国铁砧第二军校',
+    nickname: '平民之梯',
+    aka: '铁砧营',
+    established: '帝国历89年',
+    motto: '以身为砧，以战为锤',
+    source: '中城区合法公民子弟、下城区通过血税晋升者的后代、各战区因功保送的士兵',
+    duration: '三年制，毕业后授士官长衔',
+    goal: '基层士官、战斗骨干',
+    training: '标准化基础异能训练',
+    elimination: '约两成（以退学计）',
+    status: '合法公民',
+    courses: '基础异能训练、异种行为学与战场识别、结晶武器操作与维护、小队战术与协同作战、战场急救与生存技能、军法纪律与士兵管理条例',
+    trial: '毕业考核——综合战术演练与异能实弹测试，连续不合格两次者退学',
+    culture: '强调纪律、服从和集体主义。与赤铁第一军校之间存在深厚的阶级对立。铁砧营的校友网络在中下层军官中盘根错节，形成"铁砧帮"',
+    color: '#cc8844',
+    colorDim: 'rgba(204,136,68,0.12)',
+    icon: '🔨',
+    requirement: '公开招考——面向全体帝国合法公民，每年一次统一考试；保送通道——战区优秀士兵可被保送入学；血税后代享有加分待遇。录取率约百分之三。'
+  },
+  {
+    id: 'black_prison',
+    name: '帝国黑牢第三军校',
+    nickname: '死囚营',
+    aka: '黑牢、十门地狱',
+    established: '帝国历156年',
+    motto: '宽恕是神的，死亡是帝国的。你有第三条路——死在战场上',
+    source: '帝国全境法院判处重刑之罪犯、军法处定罪的逃兵与违纪军人、下城区因"反社会行为"被强制征集的危险分子',
+    duration: '不定（直到合格或死亡）',
+    goal: '可消耗的冲锋兵力',
+    training: '强制应激觉醒（幽浮应激室强行觉醒异能，死亡率约四成）',
+    elimination: '九成以上（以死亡计）',
+    status: '流罪者（永不翻身）',
+    courses: '洗脑与服从训练、基础战斗技能灌输、战场投送——"毕业"标准是在真实异种遭遇战中存活',
+    trial: '十禁闭室制度——从一号"铁棺"到十号"血匣"，恐怖程度递增。禁闭室死亡者一律登记为"训练事故"',
+    culture: '绝对绝望的生存逻辑。囚犯之间形成残酷的丛林等级。毕业生左臂上的黑牢烙印永不褪去，永远被视作"流着罪血的工具"',
+    color: '#666677',
+    colorDim: 'rgba(102,102,119,0.12)',
+    icon: '⛓',
+    requirement: '无主动招生。所有被送入者无上诉权，无申辩权。服役满十年且幸存，或立下特等战功，可获赦免并取得中城区临时居住权。但黑牢烙印永不褪去。'
+  }
+];
+
+// ---------- 军部页面渲染 ----------
+var renderMilitaryPage = function() {
+  var content = document.getElementById('page-content');
+  if (!content) return;
+
+  var currentTab = STATE.militaryTab || 'legions';
+
+  var html = '<div class="page-header">';
+  html += '<div class="page-title">帝 国 军 部</div>';
+  html += '<div style="font-size:0.8rem;color:var(--text-dim);font-family:var(--font-mono);">赤铁议会 · 四大军团 · 三所军校</div>';
+  html += '</div>';
+
+  // Tab切换
+  html += '<div style="display:flex;gap:0.5rem;margin-bottom:1.2rem;border-bottom:1px solid var(--border-color);padding-bottom:0.6rem;">';
+  html += '<button class="btn btn-sm' + (currentTab === 'legions' ? ' btn-gold' : '') + '" onclick="switchMilitaryTab(\'legions\')">四大军团</button>';
+  html += '<button class="btn btn-sm' + (currentTab === 'academies' ? ' btn-gold' : '') + '" onclick="switchMilitaryTab(\'academies\')">三所军校</button>';
+  html += '<button class="btn btn-sm' + (currentTab === 'enlist' ? ' btn-gold' : '') + '" onclick="switchMilitaryTab(\'enlist\')">入伍/报考</button>';
+  html += '</div>';
+
+  if (currentTab === 'legions') {
+    html += renderLegionsTab();
+  } else if (currentTab === 'academies') {
+    html += renderAcademiesTab();
+  } else if (currentTab === 'enlist') {
+    html += renderEnlistTab();
+  }
+
+  content.innerHTML = html;
+};
+
+var switchMilitaryTab = function(tab) {
+  STATE.militaryTab = tab;
+  renderMilitaryPage();
+};
+
+// ---------- 四大军团 Tab ----------
+var renderLegionsTab = function() {
+  var html = '';
+
+  // 总览
+  html += '<div style="margin-bottom:1.5rem;padding:1rem;background:var(--bg-secondary);border-left:3px solid var(--cyan-dim);">';
+  html += '<div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8;">';
+  html += '帝国军部下设四大军团，分别驻守帝国异空间最边缘的四大战区。';
+  html += '战区后方即为下城区——战区的墙壁渗着血，下城区的街道流着泪，中间只隔了一道薄薄的、永远在震颤的隔离墙。';
+  html += '</div></div>';
+
+  // 军团卡片
+  for (var i = 0; i < MILITARY_LEGIONS.length; i++) {
+    var leg = MILITARY_LEGIONS[i];
+    html += '<div class="military-card" style="border-left:3px solid ' + leg.color + ';margin-bottom:1rem;padding:1.2rem;background:var(--bg-card);border:1px solid var(--border-color);border-left:3px solid ' + leg.color + ';">';
+
+    // 头部
+    html += '<div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.8rem;">';
+    html += '<div style="font-size:1.8rem;width:3rem;height:3rem;display:flex;align-items:center;justify-content:center;background:' + leg.colorDim + ';border:1px solid ' + leg.color + '33;">' + leg.icon + '</div>';
+    html += '<div>';
+    html += '<div style="font-size:1.05rem;font-weight:600;color:' + leg.color + ';">' + leg.name + '</div>';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);">【' + leg.nickname + '】' + leg.theater + ' · ' + leg.size + '</div>';
+    html += '</div></div>';
+
+    // 口号
+    html += '<div style="font-family:var(--font-mono);font-size:0.8rem;color:' + leg.color + ';opacity:0.8;margin-bottom:0.8rem;padding:0.4rem 0.8rem;background:' + leg.colorDim + ';display:inline-block;letter-spacing:0.1em;">「' + leg.motto + '」</div>';
+
+    // 描述
+    html += '<div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.8;margin-bottom:0.8rem;">' + leg.description + '</div>';
+
+    // 详细字段
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.78rem;">';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">编制：</span>' + leg.structure + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">战区地形：</span>' + leg.theaterDesc + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">敌方类型：</span>' + leg.enemyType + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">作战方式：</span>' + leg.tactics + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">特色：</span>' + leg.specialty + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">装备：</span>' + leg.equipment + '</div>';
+    html += '</div>';
+
+    html += '</div>';
+  }
+
+  return html;
+};
+
+// ---------- 三大军校 Tab ----------
+var renderAcademiesTab = function() {
+  var html = '';
+
+  // 总览
+  html += '<div style="margin-bottom:1.5rem;padding:1rem;background:var(--bg-secondary);border-left:3px solid var(--gold);">';
+  html += '<div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8;">';
+  html += '帝国军部下设三所国家级军事院校，构成帝国军人培养的完整梯队。';
+  html += '它们像三道闸门——最上面的那道流出将星，中间的那道流出脊梁，最下面的那道流出……消耗品。';
+  html += '</div></div>';
+
+  // 军校卡片
+  for (var i = 0; i < MILITARY_ACADEMIES.length; i++) {
+    var aca = MILITARY_ACADEMIES[i];
+    html += '<div class="military-card" style="margin-bottom:1rem;padding:1.2rem;background:var(--bg-card);border:1px solid var(--border-color);border-left:3px solid ' + aca.color + ';">';
+
+    // 头部
+    html += '<div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.8rem;">';
+    html += '<div style="font-size:1.8rem;width:3rem;height:3rem;display:flex;align-items:center;justify-content:center;background:' + aca.colorDim + ';border:1px solid ' + aca.color + '33;">' + aca.icon + '</div>';
+    html += '<div>';
+    html += '<div style="font-size:1.05rem;font-weight:600;color:' + aca.color + ';">' + aca.name + '</div>';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);">【' + aca.nickname + '】' + aca.established + ' · ' + aca.duration + '</div>';
+    html += '</div></div>';
+
+    // 校训
+    html += '<div style="font-family:var(--font-mono);font-size:0.8rem;color:' + aca.color + ';opacity:0.8;margin-bottom:0.8rem;padding:0.4rem 0.8rem;background:' + aca.colorDim + ';display:inline-block;letter-spacing:0.1em;">「' + aca.motto + '」</div>';
+
+    // 详细字段
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.78rem;">';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">别称：</span>' + aca.aka + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">培养目标：</span>' + aca.goal + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">生源：</span>' + aca.source + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">异能教育：</span>' + aca.training + '</div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">淘汰率：</span><span style="color:#cc4444;">' + aca.elimination + '</span></div>';
+    html += '<div style="padding:0.4rem 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-dim);">社会地位：</span>' + aca.status + '</div>';
+    html += '</div>';
+
+    // 招生条件
+    html += '<div style="margin-top:0.8rem;padding:0.6rem;background:var(--bg-secondary);border-left:2px solid ' + aca.color + '44;">';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.3rem;font-weight:600;">招生条件</div>';
+    html += '<div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.7;">' + aca.requirement + '</div>';
+    html += '</div>';
+
+    // 核心课程
+    html += '<div style="margin-top:0.6rem;padding:0.6rem;background:var(--bg-secondary);border-left:2px solid ' + aca.color + '44;">';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.3rem;font-weight:600;">核心课程</div>';
+    html += '<div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.7;">' + aca.courses + '</div>';
+    html += '</div>';
+
+    // 实战考核
+    html += '<div style="margin-top:0.6rem;padding:0.6rem;background:var(--bg-secondary);border-left:2px solid ' + aca.color + '44;">';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.3rem;font-weight:600;">实战考核</div>';
+    html += '<div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.7;">' + aca.trial + '</div>';
+    html += '</div>';
+
+    // 文化
+    html += '<div style="margin-top:0.6rem;padding:0.6rem;background:var(--bg-secondary);border-left:2px solid ' + aca.color + '44;">';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.3rem;font-weight:600;">军校文化</div>';
+    html += '<div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.7;">' + aca.culture + '</div>';
+    html += '</div>';
+
+    html += '</div>';
+  }
+
+  // 横向对比表
+  html += '<div style="margin-top:1.5rem;">';
+  html += '<div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:0.8rem;letter-spacing:0.1em;">三校横向对比</div>';
+  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.75rem;">';
+  html += '<thead><tr style="border-bottom:2px solid var(--border-color);">';
+  html += '<th style="padding:0.5rem;text-align:left;color:var(--text-dim);">项目</th>';
+  html += '<th style="padding:0.5rem;text-align:left;color:#cc3333;">赤铁第一军校</th>';
+  html += '<th style="padding:0.5rem;text-align:left;color:#cc8844;">铁砧第二军校</th>';
+  html += '<th style="padding:0.5rem;text-align:left;color:#666677;">黑牢第三军校</th>';
+  html += '</tr></thead><tbody>';
+
+  var compareRows = [
+    ['别称', '将星摇篮', '平民之梯', '死囚营'],
+    ['生源', '勋贵子弟、精锐天赋者', '中城区平民、血税后代', '罪犯、逃兵、下城区凶徒'],
+    ['学制', '四年', '三年', '不定（直到合格或死亡）'],
+    ['毕业衔级', '少尉', '士官长', '无衔级（入列即士兵）'],
+    ['培养目标', '高级指挥官、战帅后备', '基层士官、战斗骨干', '可消耗的冲锋兵力'],
+    ['异能教育', '高阶定制化训练', '标准化基础训练', '强制应激觉醒'],
+    ['淘汰率', '六成（以退学计）', '约两成（以退学计）', '九成以上（以死亡计）'],
+    ['社会地位', '帝国精英', '合法公民', '流罪者（永不翻身）']
+  ];
+
+  for (var r = 0; r < compareRows.length; r++) {
+    html += '<tr style="border-bottom:1px dashed var(--border-color);">';
+    for (var c = 0; c < compareRows[r].length; c++) {
+      var cellColor = c === 0 ? 'var(--text-dim)' : 'var(--text-secondary)';
+      html += '<td style="padding:0.45rem 0.5rem;color:' + cellColor + ';">' + compareRows[r][c] + '</td>';
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div></div>';
+
+  return html;
+};
+
+// ---------- 入伍/报考 Tab ----------
+var renderEnlistTab = function() {
+  var html = '';
+  var user = STATE.currentUser;
+  var users = loadData(LS_KEYS.users, {});
+  var u = users[user] || {};
+  var profile = u.profile || {};
+  var faction = profile.faction || '';
+  var militaryStatus = STATE.militaryStatus || loadData('starnet_military_status', null);
+
+  // 当前状态
+  if (militaryStatus && militaryStatus.enlisted) {
+    html += '<div style="margin-bottom:1.5rem;padding:1rem;background:var(--bg-secondary);border-left:3px solid var(--green);">';
+    html += '<div style="font-size:0.85rem;color:var(--green);font-weight:600;margin-bottom:0.3rem;">✓ 已入伍</div>';
+    html += '<div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.7;">';
+    html += '所属：' + (militaryStatus.legionName || militaryStatus.academyName || '待定') + '<br>';
+    html += '军衔：' + (militaryStatus.rank || '列兵') + '<br>';
+    html += '入伍时间：' + (militaryStatus.enlistDate || '未知');
+    html += '</div></div>';
+  }
+
+  // 入伍选项
+  html += '<div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:0.8rem;letter-spacing:0.1em;">选择你的道路</div>';
+
+  // 军团入伍
+  html += '<div style="margin-bottom:1.2rem;">';
+  html += '<div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.6rem;font-family:var(--font-mono);">—— 军团入伍 ——</div>';
+  for (var i = 0; i < MILITARY_LEGIONS.length; i++) {
+    var leg = MILITARY_LEGIONS[i];
+    var canJoin = faction === 'military' || faction === 'court' || faction === 'emperor';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.7rem 1rem;margin-bottom:0.4rem;background:var(--bg-card);border:1px solid var(--border-color);border-left:3px solid ' + leg.color + ';">';
+    html += '<div>';
+    html += '<span style="font-size:0.85rem;color:' + leg.color + ';font-weight:600;">' + leg.icon + ' ' + leg.name + '</span>';
+    html += '<div style="font-size:0.72rem;color:var(--text-dim);margin-top:0.15rem;">' + leg.theater + ' · ' + leg.size + '</div>';
+    html += '</div>';
+    if (militaryStatus && militaryStatus.enlisted) {
+      html += '<span style="font-size:0.72rem;color:var(--text-dim);">已入伍</span>';
+    } else {
+      html += '<button class="btn btn-sm" onclick="enlistLegion(\'' + leg.id + '\')" style="border-color:' + leg.color + '66;color:' + leg.color + ';">申请入伍</button>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 军校报考
+  html += '<div style="margin-bottom:1.2rem;">';
+  html += '<div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.6rem;font-family:var(--font-mono);">—— 军校报考 ——</div>';
+  for (var j = 0; j < MILITARY_ACADEMIES.length; j++) {
+    var aca = MILITARY_ACADEMIES[j];
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.7rem 1rem;margin-bottom:0.4rem;background:var(--bg-card);border:1px solid var(--border-color);border-left:3px solid ' + aca.color + ';">';
+    html += '<div>';
+    html += '<span style="font-size:0.85rem;color:' + aca.color + ';font-weight:600;">' + aca.icon + ' ' + aca.name + '</span>';
+    html += '<div style="font-size:0.72rem;color:var(--text-dim);margin-top:0.15rem;">' + aca.nickname + ' · 淘汰率：' + aca.elimination + '</div>';
+    html += '</div>';
+    if (militaryStatus && militaryStatus.enlisted) {
+      html += '<span style="font-size:0.72rem;color:var(--text-dim);">已入伍</span>';
+    } else {
+      var btnText = j === 2 ? '申请"入学"' : '报考';
+      html += '<button class="btn btn-sm" onclick="enrollAcademy(\'' + aca.id + '\')" style="border-color:' + aca.color + '66;color:' + aca.color + ';">' + btnText + '</button>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 说明
+  html += '<div style="padding:0.8rem;background:var(--bg-secondary);border-left:2px solid var(--border-color);">';
+  html += '<div style="font-size:0.75rem;color:var(--text-dim);line-height:1.8;">';
+  html += '⚠ 入伍/报考后将影响你的星网身份标识和部分功能权限。<br>';
+  html += '赤铁第一军校需要A级以上异能天赋评级（系统自动检测）。<br>';
+  html += '铁砧第二军校对所有合法公民开放，录取率约3%。<br>';
+  html += '黑牢第三军校……你真的要申请吗？';
+  html += '</div></div>';
+
+  return html;
+};
+
+// ---------- 入伍军团 ----------
+var enlistLegion = function(legionId) {
+  var leg = null;
+  for (var i = 0; i < MILITARY_LEGIONS.length; i++) {
+    if (MILITARY_LEGIONS[i].id === legionId) { leg = MILITARY_LEGIONS[i]; break; }
+  }
+  if (!leg) return;
+
+  var confirmHtml = '<div style="padding:0.5rem 0;">';
+  confirmHtml += '<div style="font-size:0.9rem;font-weight:600;color:' + leg.color + ';margin-bottom:0.8rem;">' + leg.icon + ' ' + leg.name + '</div>';
+  confirmHtml += '<div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.8;margin-bottom:0.8rem;">';
+  confirmHtml += '你即将申请加入' + leg.name + '（' + leg.nickname + '）。<br><br>';
+  confirmHtml += '战区：' + leg.theater + '<br>';
+  confirmHtml += '作战方式：' + leg.tactics + '<br>';
+  confirmHtml += '军团口号：「' + leg.motto + '」<br><br>';
+  confirmHtml += '<span style="color:#cc4444;">一旦入伍，你将被派往' + leg.theater + '，面对' + leg.enemyType + '。</span>';
+  confirmHtml += '</div>';
+  confirmHtml += '<div style="display:flex;gap:0.6rem;justify-content:flex-end;">';
+  confirmHtml += '<button class="btn" onclick="closeModal()">再想想</button>';
+  confirmHtml += '<button class="btn btn-gold" onclick="confirmEnlistLegion(\'' + legionId + '\')">确认入伍</button>';
+  confirmHtml += '</div></div>';
+
+  openModal('入伍申请 · ' + leg.name, confirmHtml);
+};
+
+var confirmEnlistLegion = function(legionId) {
+  closeModal();
+  var leg = null;
+  for (var i = 0; i < MILITARY_LEGIONS.length; i++) {
+    if (MILITARY_LEGIONS[i].id === legionId) { leg = MILITARY_LEGIONS[i]; break; }
+  }
+  if (!leg) return;
+
+  var now = new Date();
+  var dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+  STATE.militaryStatus = {
+    enlisted: true,
+    type: 'legion',
+    legionId: legionId,
+    legionName: leg.name,
+    rank: '列兵',
+    enlistDate: dateStr
+  };
+  saveData('starnet_military_status', STATE.militaryStatus);
+
+  // 同步到个人资料
+  var users = loadData(LS_KEYS.users, {});
+  if (users[STATE.currentUser]) {
+    if (!users[STATE.currentUser].profile) users[STATE.currentUser].profile = {};
+    users[STATE.currentUser].profile.militaryBranch = leg.name;
+    users[STATE.currentUser].profile.militaryRank = '列兵';
+    saveData(LS_KEYS.users, users);
+    if (typeof syncProfileToSupabase === 'function') syncProfileToSupabase();
+  }
+
+  showToast('入伍申请已通过。欢迎加入' + leg.name + '。' + leg.motto + '。', 'success', 4000);
+  renderMilitaryPage();
+};
+
+// ---------- 报考军校 ----------
+var enrollAcademy = function(academyId) {
+  var aca = null;
+  for (var i = 0; i < MILITARY_ACADEMIES.length; i++) {
+    if (MILITARY_ACADEMIES[i].id === academyId) { aca = MILITARY_ACADEMIES[i]; break; }
+  }
+  if (!aca) return;
+
+  var isBlackPrison = academyId === 'black_prison';
+  var warningColor = isBlackPrison ? '#cc4444' : aca.color;
+
+  var confirmHtml = '<div style="padding:0.5rem 0;">';
+  confirmHtml += '<div style="font-size:0.9rem;font-weight:600;color:' + warningColor + ';margin-bottom:0.8rem;">' + aca.icon + ' ' + aca.name + '</div>';
+  confirmHtml += '<div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.8;margin-bottom:0.8rem;">';
+  confirmHtml += '别称：' + aca.aka + '<br>';
+  confirmHtml += '校训：「' + aca.motto + '」<br>';
+  confirmHtml += '学制：' + aca.duration + '<br>';
+  confirmHtml += '淘汰率：<span style="color:#cc4444;">' + aca.elimination + '</span><br><br>';
+  confirmHtml += aca.requirement + '<br><br>';
+  if (isBlackPrison) {
+    confirmHtml += '<span style="color:#cc4444;font-weight:600;">⚠ 警告：黑牢第三军校淘汰率为九成以上（以死亡计）。毕业生左臂上的黑牢烙印永不褪去。确认申请？</span>';
+  }
+  confirmHtml += '</div>';
+  confirmHtml += '<div style="display:flex;gap:0.6rem;justify-content:flex-end;">';
+  confirmHtml += '<button class="btn" onclick="closeModal()">再想想</button>';
+  if (isBlackPrison) {
+    confirmHtml += '<button class="btn" style="border-color:#cc4444;color:#cc4444;" onclick="confirmEnrollAcademy(\'' + academyId + '\')">确认申请（后果自负）</button>';
+  } else {
+    confirmHtml += '<button class="btn btn-gold" onclick="confirmEnrollAcademy(\'' + academyId + '\')">确认报考</button>';
+  }
+  confirmHtml += '</div></div>';
+
+  openModal('军校报考 · ' + aca.name, confirmHtml);
+};
+
+var confirmEnrollAcademy = function(academyId) {
+  closeModal();
+  var aca = null;
+  for (var i = 0; i < MILITARY_ACADEMIES.length; i++) {
+    if (MILITARY_ACADEMIES[i].id === academyId) { aca = MILITARY_ACADEMIES[i]; break; }
+  }
+  if (!aca) return;
+
+  // 赤铁第一军校特殊判断
+  if (academyId === 'crimson_iron') {
+    var abilityLevel = 'C';
+    var users0 = loadData(LS_KEYS.users, {});
+    if (users0[STATE.currentUser] && users0[STATE.currentUser].profile) {
+      abilityLevel = users0[STATE.currentUser].profile.abilityLevel || 'C';
+    }
+    if (!abilityLevel.match(/^[ASas]/)) {
+      showToast('异能潜力评级不足（需要A级以上）。赤铁第一军校拒绝了你的申请。', 'error', 4000);
+      return;
+    }
+  }
+
+  // 铁砧第二军校随机录取
+  if (academyId === 'anvil') {
+    if (Math.random() > 0.03) {
+      showToast('很遗憾，铁砧第二军校本年度招生名额已满。录取率仅3%，请下次再试。', 'error', 4000);
+      return;
+    }
+  }
+
+  var now = new Date();
+  var dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+  var rank = '学员';
+  if (academyId === 'crimson_iron') rank = '预备少尉';
+  else if (academyId === 'anvil') rank = '预备士官';
+  else if (academyId === 'black_prison') rank = '罪囚学员';
+
+  STATE.militaryStatus = {
+    enlisted: true,
+    type: 'academy',
+    academyId: academyId,
+    academyName: aca.name,
+    rank: rank,
+    enlistDate: dateStr
+  };
+  saveData('starnet_military_status', STATE.militaryStatus);
+
+  // 同步到个人资料
+  var users = loadData(LS_KEYS.users, {});
+  if (users[STATE.currentUser]) {
+    if (!users[STATE.currentUser].profile) users[STATE.currentUser].profile = {};
+    users[STATE.currentUser].profile.militaryBranch = aca.name;
+    users[STATE.currentUser].profile.militaryRank = rank;
+    saveData(LS_KEYS.users, users);
+    if (typeof syncProfileToSupabase === 'function') syncProfileToSupabase();
+  }
+
+  if (academyId === 'black_prison') {
+    showToast('你已被送入' + aca.name + '。左臂上的烙印让你永远无法回头。祝你好运——你会需要的。', 'warning', 5000);
+  } else {
+    showToast('恭喜你被' + aca.name + '录取！' + aca.motto, 'success', 4000);
+  }
+  renderMilitaryPage();
+};
+
+
+// ============================================================
 // 新增功能二：机密档案扩充 + 用户创作
 // ============================================================
 
@@ -42360,7 +42939,6 @@ var renderDossierMineHeader = function() {
       '.nh-death-overlay {',
       '  position: fixed; top: 0; left: 0; width: 100%; height: 100%;',
       '  background: #000; z-index: 99999; opacity: 0; pointer-events: none;',
-      '  transition: opacity 0.4s ease;',
       '}',
       '.nh-death-overlay.active { opacity: 1; pointer-events: all; }',
       '.nh-death-flash {',
@@ -42373,6 +42951,28 @@ var renderDossierMineHeader = function() {
       '  color: #cc8844; font-size: 1.2rem;',
       '  font-family: var(--font-mono); letter-spacing: 0.2em;',
       '  z-index: 100001; opacity: 0; text-align: center; pointer-events: none;',
+      '  will-change: transform, opacity, filter;',
+      '}',
+      '.nh-death-memory {',
+      '  position: fixed; z-index: 100001; pointer-events: none;',
+      '  color: rgba(255,255,255,0.85); font-size: 0.85rem;',
+      '  font-family: var(--font-mono); letter-spacing: 0.1em;',
+      '  opacity: 0; text-align: center; white-space: nowrap;',
+      '  text-shadow: 0 0 12px rgba(255,255,255,0.3);',
+      '  will-change: opacity, transform;',
+      '}',
+      '.nh-death-noise {',
+      '  position: fixed; top: 0; left: 0; width: 100%; height: 100%;',
+      '  z-index: 100002; pointer-events: none; opacity: 0;',
+      '  background-image: repeating-conic-gradient(rgba(255,255,255,0.03) 0% 0.0001%, transparent 0.0002% 0.0003%);',
+      '  background-size: 4px 4px;',
+      '}',
+      '.nh-death-vein {',
+      '  position: fixed; top: 0; left: 0; width: 100%; height: 100%;',
+      '  z-index: 99998; pointer-events: none; opacity: 0;',
+      '  background: radial-gradient(ellipse at 30% 40%, rgba(120,10,10,0.15) 0%, transparent 50%),',
+      '              radial-gradient(ellipse at 70% 60%, rgba(80,5,5,0.12) 0%, transparent 40%),',
+      '              radial-gradient(ellipse at 50% 80%, rgba(100,8,8,0.1) 0%, transparent 45%);',
       '}',
       '@keyframes nhLampFlicker {',
       '  0%, 100% { opacity: 1; }',
@@ -42581,6 +43181,12 @@ var renderDossierMineHeader = function() {
   };
 
   var startSimulateDeath = function() {
+    // === 创建DOM层 ===
+    var vein = document.createElement('div');
+    vein.className = 'nh-death-vein';
+    vein.id = 'nh-death-vein';
+    document.body.appendChild(vein);
+
     var overlay = document.createElement('div');
     overlay.className = 'nh-death-overlay';
     overlay.id = 'nh-death-overlay';
@@ -42591,18 +43197,103 @@ var renderDossierMineHeader = function() {
     flash.id = 'nh-death-flash';
     document.body.appendChild(flash);
 
+    var noise = document.createElement('div');
+    noise.className = 'nh-death-noise';
+    noise.id = 'nh-death-noise';
+    document.body.appendChild(noise);
+
     var text = document.createElement('div');
     text.className = 'nh-death-text';
     text.id = 'nh-death-text';
-    text.innerHTML = '...你在下落...<br><span style="font-size:0.7rem;opacity:0.7;">虚妄之地</span>';
     document.body.appendChild(text);
 
-    setTimeout(function() {
-      overlay.classList.add('active');
-      text.style.transition = 'opacity 0.5s ease';
-      text.style.opacity = '1';
-    }, 50);
+    // === 回马灯记忆碎片 ===
+    var memories = [
+      '你三岁时母亲哼过的那首歌',
+      '第一次拿起武器时掌心的重量',
+      '血税通过那天的阳光很刺眼',
+      '一个你没能救回来的人',
+      '某个雨夜你杀死的第一只异种',
+      '军校毕业典礼上的誓言',
+      '你最后一次说"我在乎你"',
+      '战区上空永远暗红色的云',
+      '命灯熄灭前的最后一丝温暖',
+      '你忘记了最重要的那件事',
+      '有人叫你的名字，但你已经想不起是谁',
+      '那一天如果做了不同的选择',
+      '你曾经相信过什么',
+      '也许下辈子'
+    ];
 
+    var memoryEls = [];
+    var memoryPositions = [
+      {top:'15%',left:'20%'},{top:'25%',left:'65%'},{top:'40%',left:'10%'},
+      {top:'55%',left:'70%'},{top:'35%',left:'45%'},{top:'65%',left:'30%'},
+      {top:'20%',left:'50%'},{top:'70%',left:'60%'},{top:'45%',left:'25%'},
+      {top:'60%',left:'15%'},{top:'30%',left:'75%'},{top:'50%',left:'55%'},
+      {top:'75%',left:'40%'},{top:'10%',left:'40%'}
+    ];
+
+    // === 辅助函数 ===
+    function randRange(min, max) { return min + Math.random() * (max - min); }
+    function randInt(min, max) { return Math.floor(randRange(min, max + 1)); }
+
+    function doFlash(color, duration, opacity) {
+      flash.style.transition = 'none';
+      flash.style.background = color || '#fff';
+      flash.style.opacity = String(opacity || 0.9);
+      setTimeout(function() {
+        flash.style.transition = 'opacity ' + (duration || 80) + 'ms ease-out';
+        flash.style.opacity = '0';
+      }, 20);
+    }
+
+    function doGlitch(element, intensity) {
+      var skewX = randRange(-intensity, intensity);
+      var skewY = randRange(-intensity * 0.5, intensity * 0.5);
+      var scaleX = 1 + randRange(-0.03, 0.03) * intensity;
+      var scaleY = 1 + randRange(-0.05, 0.05) * intensity;
+      var rot = randRange(-intensity * 0.3, intensity * 0.3);
+      var tx = randRange(-intensity * 2, intensity * 2);
+      var ty = randRange(-intensity * 2, intensity * 2);
+      element.style.transform = 'translate(calc(-50% + ' + tx + 'px), calc(-50% + ' + ty + 'px)) skew(' + skewX + 'deg, ' + skewY + 'deg) scale(' + scaleX + ', ' + scaleY + ') rotate(' + rot + 'deg)';
+      element.style.filter = 'blur(' + randRange(0, intensity * 0.15) + 'px) hue-rotate(' + randRange(-30, 30) + 'deg)';
+    }
+
+    function showMemory(index, duration) {
+      if (index >= memories.length) return;
+      var el = document.createElement('div');
+      el.className = 'nh-death-memory';
+      el.textContent = memories[index];
+      var pos = memoryPositions[index % memoryPositions.length];
+      el.style.top = pos.top;
+      el.style.left = pos.left;
+      el.style.transform = 'translate(-50%, -50%) scale(' + randRange(0.8, 1.3) + ') rotate(' + randRange(-5, 5) + 'deg)';
+      document.body.appendChild(el);
+      memoryEls.push(el);
+
+      // 闪入
+      el.style.transition = 'opacity ' + randInt(30, 80) + 'ms ease-in';
+      el.style.opacity = String(randRange(0.5, 1));
+
+      // 闪出
+      setTimeout(function() {
+        el.style.transition = 'opacity ' + randInt(20, 60) + 'ms ease-out';
+        el.style.opacity = '0';
+        setTimeout(function() {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 100);
+      }, duration || randInt(120, 350));
+    }
+
+    // === 阶段0：瞬间黑屏（0ms）===
+    overlay.classList.add('active');
+    overlay.style.transition = 'none';
+    overlay.style.opacity = '1';
+    vein.style.opacity = '0.3';
+    vein.style.transition = 'opacity 2s ease';
+
+    // 命灯熄灭
     setTimeout(function() {
       var lamps = document.querySelectorAll('.nether-lamp.lit');
       if (lamps.length > 0) {
@@ -42620,25 +43311,137 @@ var renderDossierMineHeader = function() {
           if (labelDiv) labelDiv.style.color = '#554433';
         }, 300);
       }
-    }, 700);
+    }, 400);
 
-    setTimeout(function() {
-      flash.style.transition = 'opacity 0.15s ease';
-      flash.style.opacity = '0.9';
+    // === 阶段1：意识碎裂（100~1200ms）高频白闪+微扭曲 ===
+    text.innerHTML = '...你在下落...<br><span style="font-size:0.7rem;opacity:0.7;">虚妄之地</span>';
+    text.style.transition = 'opacity 0.15s ease';
+    text.style.opacity = '1';
+
+    var phase1FlashTimes = [100, 180, 250, 340, 420, 530, 600, 700, 780, 880, 950, 1050, 1120];
+    phase1FlashTimes.forEach(function(t) {
       setTimeout(function() {
-        flash.style.opacity = '0';
-      }, 200);
-    }, 1300);
+        doFlash('#ffffff', randInt(40, 100), randRange(0.5, 0.95));
+        doGlitch(text, randRange(1, 4));
+      }, t);
+    });
 
+    // 第一批记忆碎片（快速、模糊）
+    var memIdx = 0;
+    var phase1MemInterval = setInterval(function() {
+      if (memIdx < 4) {
+        showMemory(memIdx, randInt(80, 200));
+        memIdx++;
+      } else {
+        clearInterval(phase1MemInterval);
+      }
+    }, randInt(200, 300));
+
+    // === 阶段2：混乱崩解（1200~2800ms）彩色闪频+强扭曲+更多记忆 ===
     setTimeout(function() {
+      text.innerHTML = '记 忆 正 在 剥 离<br><span style="font-size:0.65rem;opacity:0.6;color:#ff6644;">15% 记忆损失</span>';
+      text.style.color = '#ddaa66';
+    }, 1200);
+
+    var phase2Colors = ['#ffffff', '#ff3333', '#3355ff', '#33ff66', '#ff6633', '#cc44ff', '#ffffff', '#ff3333'];
+    var phase2Time = 1200;
+    var phase2End = 2800;
+    while (phase2Time < phase2End) {
+      (function(t) {
+        setTimeout(function() {
+          var color = phase2Colors[randInt(0, phase2Colors.length - 1)];
+          doFlash(color, randInt(30, 80), randRange(0.3, 0.85));
+          doGlitch(text, randRange(3, 8));
+          // 画面扭曲
+          overlay.style.transform = 'skew(' + randRange(-2, 2) + 'deg, ' + randRange(-1, 1) + 'deg) scale(' + randRange(0.98, 1.02) + ')';
+          setTimeout(function() { overlay.style.transform = 'none'; }, randInt(50, 120));
+        }, t);
+      })(phase2Time);
+      phase2Time += randInt(40, 180);
+    }
+
+    // 第二波记忆碎片（更密集）
+    var memIdx2 = 4;
+    var phase2MemInterval = setInterval(function() {
+      if (memIdx2 < 10) {
+        showMemory(memIdx2, randInt(100, 280));
+        memIdx2++;
+      } else {
+        clearInterval(phase2MemInterval);
+      }
+    }, randInt(150, 250));
+
+    // 噪点开始出现
+    setTimeout(function() {
+      noise.style.transition = 'opacity 0.8s ease';
+      noise.style.opacity = '0.15';
+    }, 1500);
+
+    // 血管纹理加深
+    setTimeout(function() {
+      vein.style.opacity = '0.6';
+    }, 1800);
+
+    // === 阶段3：濒死深渊（2800~4000ms）慢闪+重度扭曲+最后记忆 ===
+    setTimeout(function() {
+      text.innerHTML = '你 正 在 消 失<br><span style="font-size:0.6rem;opacity:0.5;color:#884444;">神经投射即将终止</span>';
+      text.style.color = '#aa6644';
+      text.style.fontSize = '1rem';
+    }, 2800);
+
+    // 缓慢但强烈的闪光
+    var phase3Times = [2900, 3100, 3350, 3600, 3800, 3950];
+    phase3Times.forEach(function(t) {
+      setTimeout(function() {
+        doFlash('#ffffff', randInt(150, 300), randRange(0.2, 0.6));
+        doGlitch(text, randRange(5, 12));
+      }, t);
+    });
+
+    // 最后的记忆碎片（缓慢、清晰、令人心碎）
+    var memIdx3 = 10;
+    var phase3MemInterval = setInterval(function() {
+      if (memIdx3 < memories.length) {
+        showMemory(memIdx3, randInt(300, 500));
+        memIdx3++;
+      } else {
+        clearInterval(phase3MemInterval);
+      }
+    }, 350);
+
+    // 噪点加重
+    setTimeout(function() {
+      noise.style.opacity = '0.25';
+    }, 3200);
+
+    // === 阶段4：虚无（4000~4800ms）一切消失 ===
+    setTimeout(function() {
+      text.style.transition = 'opacity 1s ease, filter 1s ease';
       text.style.opacity = '0';
-      overlay.classList.remove('active');
-    }, 1700);
+      text.style.filter = 'blur(8px)';
+      noise.style.transition = 'opacity 1s ease';
+      noise.style.opacity = '0';
+      vein.style.transition = 'opacity 1.5s ease';
+      vein.style.opacity = '0';
+      overlay.style.transition = 'opacity 1.2s ease';
+      overlay.style.opacity = '0';
+    }, 4000);
 
+    // === 阶段5：清理与数据更新（5000ms） ===
     setTimeout(function() {
+      // 清理所有记忆碎片
+      memoryEls.forEach(function(el) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      });
+      // 清理残留的memory元素
+      document.querySelectorAll('.nh-death-memory').forEach(function(el) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      });
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       if (flash.parentNode) flash.parentNode.removeChild(flash);
       if (text.parentNode) text.parentNode.removeChild(text);
+      if (noise.parentNode) noise.parentNode.removeChild(noise);
+      if (vein.parentNode) vein.parentNode.removeChild(vein);
 
       STATE.netherDeaths = (STATE.netherDeaths || 0) + 1;
       var currentMem = typeof STATE.memoryRetention === 'number' ? STATE.memoryRetention : 1;
@@ -42652,10 +43455,24 @@ var renderDossierMineHeader = function() {
       if (!STATE.netherDeathRecords) STATE.netherDeathRecords = [];
       var now = new Date();
       var timeStr = now.getFullYear() + '-' + padZero(now.getMonth() + 1) + '-' + padZero(now.getDate()) + ' ' + padZero(now.getHours()) + ':' + padZero(now.getMinutes());
+
+      // 随机选一段"失去的记忆"
+      var lostMemories = [
+        '你忘记了母亲哼过的那首歌的旋律。那段记忆像被风吹散的烟，你伸手去抓，只抓到了空气。',
+        '你忘记了一个人的脸。你知道那个人很重要，但你想不起他的样子。只记得一种钝痛。',
+        '你忘记了血税通过那天的阳光。那本该是你人生中最明亮的一天，现在只剩下一个空洞的概念。',
+        '你忘记了军校毕业典礼上的誓言。那些字句曾经刻在你的骨头里，现在它们被磨平了。',
+        '你忘记了某个雨夜你杀死的第一只异种的名字。你记得血，但忘记了原因。',
+        '你忘记了你最后一次说"我在乎你"是对谁说的。那句话还挂在你的嘴边，但对象已经消失了。',
+        '你忘记了你曾经相信过什么。那种信念像沙堡一样坍塌了，你连废墟都找不到。',
+        '你忘记了战区的天空。你曾经在那里度过无数个日夜，但那些日夜现在只是一片模糊的暗红。'
+      ];
+      var lostMem = lostMemories[randInt(0, lostMemories.length - 1)];
+
       STATE.netherDeathRecords.push({
         time: timeStr,
         cause: '虚妄之地 · 模拟死亡',
-        lostMemory: '一段幻境中的人生碎片。你记不清那37秒里经历了什么，只留下一种深深的迷失感。'
+        lostMemory: lostMem
       });
       if (typeof saveData === 'function' && typeof LS_KEYS !== 'undefined' && LS_KEYS.netherDeathRecords) {
         saveData(LS_KEYS.netherDeathRecords, STATE.netherDeathRecords);
@@ -42665,10 +43482,10 @@ var renderDossierMineHeader = function() {
         increaseErosion('hunter', 5);
       }
 
-      showToast('模拟完成。你在虚妄之地的幻境中迷失了37秒。', 'info', 3500);
+      showToast('模拟完成。你在虚妄之地的幻境中迷失了37秒。有一段记忆永远消失了。', 'info', 4500);
 
       showNetherHallPage();
-    }, 2100);
+    }, 5000);
   };
 
   var padZero = function(n) { return n < 10 ? '0' + n : '' + n; };
@@ -43281,6 +44098,14 @@ var renderDossierMineHeader = function() {
           <svg class="icon"><use href="#icon-quest"></use></svg>
 
           <span>冥界契约所</span>
+
+        </div>
+
+        <div class="more-service-item" onclick="navigateTo('military');toggleMoreMenu();">
+
+          <svg class="icon"><use href="#icon-faction-military"></use></svg>
+
+          <span>军部</span>
 
         </div>
 
