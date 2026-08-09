@@ -14034,7 +14034,9 @@ body.darknet-active {
 
     position: relative !important;
 
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+
+    overflow-y: auto !important;
 
   }
 
@@ -14270,7 +14272,7 @@ body.darknet-active {
 
     padding: 12px !important;
 
-    padding-bottom: 60px !important;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
 
   }
 
@@ -15955,7 +15957,7 @@ renderUserPublicProfile = function(userId) {
 
   if (!STATE.userProfileTab) STATE.userProfileTab = 'profile';
 
-  let html = '<div style="margin-bottom:1rem;"><button class="btn btn-sm" onclick="history.back ? history.back() : navigateTo(\'forum\')">◂ 返回</button></div>';
+  let html = '<div style="margin-bottom:1rem;"><button class="btn btn-sm" onclick="navigateBack()">◂ 返回</button></div>';
 
   // 顶部横幅
   html += '<div class="card glow-card" style="padding:0;overflow:hidden;margin-bottom:1rem;">';
@@ -16149,7 +16151,7 @@ renderRoleProfilePage = function(userId) {
 
   
 
-  let html = '<div style="margin-bottom:1rem;"><button class="btn btn-sm" onclick="history.back ? history.back() : navigateTo(\'forum\')">◂ 返回</button></div>';
+  let html = '<div style="margin-bottom:1rem;"><button class="btn btn-sm" onclick="navigateBack()">◂ 返回</button></div>';
 
   
 
@@ -20361,93 +20363,94 @@ async function _baseInitApp() {
       
 
             
-      // 公民ID双向同步：Supabase优先，保证账号唯一
+      // ====== 登录时完整档案云端同步（v4.7.10 重写）======
+      // 核心原则：云端数据优先，确保跨端统一
       try {
         const userId = user.id;
-        const { data: profileData, error: profileError } = await supabaseClient
-          .from(SB_TABLES.profiles)
-          .select('citizen_id')
-          .eq('user_id', userId)
-          .single();
-        
         const localUser = users[username];
         const localCid = localUser.citizenId || '';
+        const localFaction = localUser.faction || 'military';
+        const localBalance = Number(loadData(LS_KEYS.balance + '_' + username, 200)) || 0;
         
-        if (!profileError && profileData && profileData.citizen_id) {
-          if (localCid !== profileData.citizen_id) {
-            localUser.citizenId = profileData.citizen_id;
-            users[username] = localUser;
-            saveData(LS_KEYS.users, users);
-          }
-        } else if (localCid) {
-          await supabaseClient
-            .from(SB_TABLES.profiles)
-            .update({ citizen_id: localCid })
-            .eq('user_id', userId);
-        } else {
-          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-          let newCid = 'IMP-';
-          for (let ci = 0; ci < 8; ci++) {
-            newCid += chars.charAt(Math.floor(Math.random() * chars.length));
-          }
-          localUser.citizenId = newCid;
-          users[username] = localUser;
-          saveData(LS_KEYS.users, users);
-          try {
-            await supabaseClient
-              .from(SB_TABLES.profiles)
-              .update({ citizen_id: newCid })
-              .eq('user_id', userId);
-          } catch(e) {
-            try {
-              await supabaseClient
-                .from(SB_TABLES.profiles)
-                .insert({ user_id: userId, username: username, citizen_id: newCid });
-            } catch(e2) { console.warn('citizen_id insert failed:', e2); }
-          }
-        }
-      } catch(e) {
-        console.warn('citizenId sync failed:', e);
-      }
-      
-      // 完整档案云端同步：登录时拉取最新阵营、头像、公民ID等
-      try {
-        const { data: fullProfile, error: fpError } = await supabaseClient
+        // 1. 从云端拉取完整档案
+        const { data: cloudProfile, error: cloudError } = await supabaseClient
           .from(SB_TABLES.profiles)
           .select('*')
           .eq('user_id', userId)
           .single();
-        if (!fpError && fullProfile) {
-          const lu = users[username];
-          if (lu) {
-            if (fullProfile.faction) lu.faction = fullProfile.faction;
-            if (fullProfile.citizen_id) lu.citizenId = fullProfile.citizen_id;
-            if (fullProfile.created_at) lu.createdAt = fullProfile.created_at;
-            if (fullProfile.balance !== null && fullProfile.balance !== undefined) {
-              var _cloudBal = Number(fullProfile.balance) || 0;
-              var _localBal = Number(loadData(LS_KEYS.balance + '_' + username, 0)) || 0;
-              var _bestBal = Math.max(_cloudBal, _localBal);
-              if (_bestBal !== _localBal) {
-                saveData(LS_KEYS.balance + '_' + username, _bestBal);
-              }
+        
+        if (!cloudError && cloudProfile) {
+          // 云端有数据 → 以云端为准覆盖本地
+          if (cloudProfile.citizen_id) { localUser.citizenId = cloudProfile.citizen_id; }
+          if (cloudProfile.faction) { localUser.faction = cloudProfile.faction; }
+          if (cloudProfile.avatar) { localUser.avatar = cloudProfile.avatar; }
+          if (cloudProfile.created_at) { localUser.createdAt = cloudProfile.created_at; }
+          if (cloudProfile.balance !== null && cloudProfile.balance !== undefined) {
+            var _cloudBal = Number(cloudProfile.balance) || 0;
+            var _bestBal = Math.max(_cloudBal, localBalance);
+            saveData(LS_KEYS.balance + '_' + username, _bestBal);
+            if (_bestBal > _cloudBal) {
+              // 本地余额更大，反向推送到云端
+              await supabaseClient.from(SB_TABLES.profiles).update({ balance: _bestBal }).eq('user_id', userId);
             }
-            users[username] = lu;
-            saveData(LS_KEYS.users, users);
           }
-          // 同步到STATE.userProfile的localStorage，确保enterMainApp读到最新值
+          users[username] = localUser;
+          saveData(LS_KEYS.users, users);
+          
+          // 同步到STATE.userProfile的localStorage
           var _localProfile = loadData(LS_KEYS.userProfile + '_' + username, null);
           if (!_localProfile) _localProfile = {};
-          var _changed = false;
-          if (fullProfile.avatar && fullProfile.avatar !== _localProfile.avatar) { _localProfile.avatar = fullProfile.avatar; _changed = true; }
-          if (fullProfile.faction && fullProfile.faction !== _localProfile.faction) { _localProfile.faction = fullProfile.faction; _changed = true; }
-          if (fullProfile.codename && fullProfile.codename !== _localProfile.codename) { _localProfile.codename = fullProfile.codename; _changed = true; }
-          if (fullProfile.nickname && fullProfile.nickname !== _localProfile.name) { _localProfile.name = fullProfile.nickname; _changed = true; }
-          if (fullProfile.bio && fullProfile.bio !== _localProfile.bio) { _localProfile.bio = fullProfile.bio; _changed = true; }
-          if (fullProfile.rank && fullProfile.rank !== _localProfile.rank) { _localProfile.rank = fullProfile.rank; _changed = true; }
-          if (_changed) saveData(LS_KEYS.userProfile + '_' + username, _localProfile);
+          if (cloudProfile.avatar) _localProfile.avatar = cloudProfile.avatar;
+          if (cloudProfile.faction) _localProfile.faction = cloudProfile.faction;
+          if (cloudProfile.codename) _localProfile.codename = cloudProfile.codename;
+          if (cloudProfile.nickname) _localProfile.name = cloudProfile.nickname;
+          if (cloudProfile.bio) _localProfile.bio = cloudProfile.bio;
+          if (cloudProfile.rank) _localProfile.rank = cloudProfile.rank;
+          saveData(LS_KEYS.userProfile + '_' + username, _localProfile);
+          
+        } else {
+          // 云端无数据（新表/首次登录）→ 用upsert把本地数据全部推上去
+          if (!localCid) {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            var newCid = 'IMP-';
+            for (let ci = 0; ci < 8; ci++) {
+              newCid += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            localUser.citizenId = newCid;
+            users[username] = localUser;
+            saveData(LS_KEYS.users, users);
+          }
+          
+          var _localProfile = loadData(LS_KEYS.userProfile + '_' + username, null);
+          if (!_localProfile) _localProfile = {};
+          
+          var upsertRow = {
+            user_id: userId,
+            username: username,
+            citizen_id: localUser.citizenId,
+            faction: localUser.faction || 'military',
+            avatar: _localProfile.avatar || null,
+            codename: _localProfile.codename || null,
+            nickname: _localProfile.name || null,
+            bio: _localProfile.bio || null,
+            rank: _localProfile.rank || null,
+            balance: localBalance
+          };
+          
+          const { error: upsertErr } = await supabaseClient
+            .from(SB_TABLES.profiles)
+            .upsert(upsertRow, { onConflict: 'user_id' });
+          
+          if (upsertErr) {
+            console.warn('[login sync] upsert failed, trying insert:', upsertErr);
+            // fallback: 纯插入
+            await supabaseClient.from(SB_TABLES.profiles).insert(upsertRow);
+          } else {
+            console.log('[login sync] profile pushed to cloud for user:', username);
+          }
         }
       } catch(e) {
-        console.warn('login profile sync failed:', e);
+        console.warn('[login sync] failed:', e);
       }
       
 enterMainApp();
@@ -28813,7 +28816,7 @@ function saveUserAvatar(dataUrl){if(!STATE.userProfile)STATE.userProfile={};STAT
 
 function syncProfileToSupabase(){try{if(!STATE._cloudSyncReady){console.warn('[sync] skipped: cloud data not loaded yet');return;}if(typeof supabaseClient==='undefined'||!supabaseClient)return;const uid=getCurrentUserId();if(!uid)return;const p=STATE.userProfile;if(!p)return;var _cid=null;var _bal=STATE.balance||0;if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});if(_users[STATE.currentUser]&&_users[STATE.currentUser].citizenId)_cid=_users[STATE.currentUser].citizenId;}const row={avatar:p.avatar||null,faction:p.faction||null,codename:p.codename||null,nickname:p.name||null,signature:p.bio||null,bio:p.bio||null,rank:p.rank||null,citizen_id:_cid,balance:Math.round(_bal)};row.user_id=uid;if(STATE.currentUser)row.username=STATE.currentUser;supabaseClient.from(SB_TABLES.profiles).upsert(row,{onConflict:'user_id'}).then(function(r){if(r.error){console.warn('profile upsert fail, trying update:',r.error);supabaseClient.from(SB_TABLES.profiles).update(row).eq('user_id',uid).then(function(r2){if(r2.error)console.warn('profile update fail:',r2.error);else console.log('profile synced via update');});}else{console.log('profile synced to cloud');}});}catch(e){console.warn('syncProfileToSupabase error:',e);}}
 
-function loadProfileFromSupabase(){try{if(typeof supabaseClient==='undefined'||!supabaseClient)return Promise.resolve(null);const uid=getCurrentUserId();if(!uid)return Promise.resolve(null);return supabaseClient.from(SB_TABLES.profiles).select('*').eq('user_id',uid).single().then(function(r){if(r.data&&!r.error){const d=r.data;var _needSaveUsers=false;if(d.avatar)STATE.userProfile.avatar=d.avatar;if(d.faction)STATE.userProfile.faction=d.faction;if(d.codename)STATE.userProfile.codename=d.codename;if(d.nickname)STATE.userProfile.name=d.nickname;if(d.bio)STATE.userProfile.bio=d.bio;if(d.rank)STATE.userProfile.rank=d.rank;saveData(LS_KEYS.userProfile+'_'+STATE.currentUser,STATE.userProfile);if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});var _u=_users[STATE.currentUser];if(_u){if(d.faction&&d.faction!==_u.faction){_u.faction=d.faction;_needSaveUsers=true;}if(d.citizen_id&&d.citizen_id!==_u.citizenId){_u.citizenId=d.citizen_id;_needSaveUsers=true;}if(d.balance!==null&&d.balance!==undefined){var cloudBal=Number(d.balance)||0;var localBal=STATE.balance||0;if(cloudBal!==localBal){var bestBal=Math.max(cloudBal,localBal);STATE.balance=bestBal;saveData(LS_KEYS.balance+'_'+STATE.currentUser,bestBal);var _tb=document.getElementById('top-balance');if(_tb)_tb.textContent=bestBal.toFixed(1);if(bestBal!==cloudBal&&STATE._cloudSyncReady){if(typeof syncProfileToSupabase==='function')syncProfileToSupabase();}}}if(d.created_at&&d.created_at!==_u.createdAt){_u.createdAt=d.created_at;_needSaveUsers=true;}if(_needSaveUsers){_users[STATE.currentUser]=_u;saveData(LS_KEYS.users,_users);}}}refreshTopBarAvatar();var _fc=d.faction||getCurrentFaction();var _topF=document.getElementById('top-faction');if(_topF){_topF.textContent=getFactionName(_fc);_topF.style.borderColor=getFactionColor(_fc);_topF.style.color=getFactionColor(_fc);}document.body.className='faction-'+_fc;STATE._cloudSyncReady=true;return d;}return null;});}catch(e){console.warn('loadProfileFromSupabase error:',e);return Promise.resolve(null);}}
+function loadProfileFromSupabase(){try{if(typeof supabaseClient==='undefined'||!supabaseClient)return Promise.resolve(null);const uid=getCurrentUserId();if(!uid)return Promise.resolve(null);return supabaseClient.from(SB_TABLES.profiles).select('*').eq('user_id',uid).single().then(function(r){if(r.data&&!r.error){const d=r.data;var _needSaveUsers=false;if(d.avatar)STATE.userProfile.avatar=d.avatar;if(d.faction)STATE.userProfile.faction=d.faction;if(d.codename)STATE.userProfile.codename=d.codename;if(d.nickname)STATE.userProfile.name=d.nickname;if(d.bio)STATE.userProfile.bio=d.bio;if(d.rank)STATE.userProfile.rank=d.rank;saveData(LS_KEYS.userProfile+'_'+STATE.currentUser,STATE.userProfile);if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});var _u=_users[STATE.currentUser];if(_u){if(d.faction&&d.faction!==_u.faction){_u.faction=d.faction;_needSaveUsers=true;}if(d.citizen_id&&d.citizen_id!==_u.citizenId){_u.citizenId=d.citizen_id;_needSaveUsers=true;}if(d.balance!==null&&d.balance!==undefined){var cloudBal=Number(d.balance)||0;var localBal=STATE.balance||0;if(cloudBal!==localBal){var bestBal=Math.max(cloudBal,localBal);STATE.balance=bestBal;saveData(LS_KEYS.balance+'_'+STATE.currentUser,bestBal);var _tb=document.getElementById('top-balance');if(_tb)_tb.textContent=bestBal.toFixed(1);if(bestBal!==cloudBal&&STATE._cloudSyncReady){if(typeof syncProfileToSupabase==='function')syncProfileToSupabase();}}}if(d.created_at&&d.created_at!==_u.createdAt){_u.createdAt=d.created_at;_needSaveUsers=true;}if(_needSaveUsers){_users[STATE.currentUser]=_u;saveData(LS_KEYS.users,_users);}}}refreshTopBarAvatar();var _fc=d.faction||getCurrentFaction();var _topF=document.getElementById('top-faction');if(_topF){_topF.textContent=getFactionName(_fc);_topF.style.borderColor=getFactionColor(_fc);_topF.style.color=getFactionColor(_fc);}document.body.className='faction-'+_fc;STATE._cloudSyncReady=true;return d;}else{STATE._cloudSyncReady=true;if(typeof syncProfileToSupabase==='function'){setTimeout(function(){syncProfileToSupabase();},500);}return null;}});}catch(e){console.warn('loadProfileFromSupabase error:',e);STATE._cloudSyncReady=true;return Promise.resolve(null);}}
 
 function handleAvatarUpload(e){const f=e.target.files[0];if(!f)return;if(!f.type.startsWith('image/')){showToast('请选择图片','error');return;}if(f.size>5*1024*1024){showToast('图片不能超过5MB','error');return;}showToast('正在处理头像...','info');compressImage(f,200,0.8,function(d){saveUserAvatar(d);showToast('头像上传成功','success');if(STATE.currentNav==='profile')renderProfilePage();refreshTopBarAvatar();});}
 
