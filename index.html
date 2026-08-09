@@ -15362,6 +15362,13 @@ body.darknet-active {
 
 }
 
+
+/* 阵营功能页面补充样式 */
+.faction-hub-rank-card { transition: all 0.3s ease; }
+.faction-hub-rank-card:hover { transform: translateX(2px); }
+.faction-hub-activity-card { transition: all 0.3s ease; }
+.faction-hub-activity-card:hover { transform: translateY(-1px); }
+
 /* 冥界契约所 补充样式 */
 .nether-lamp.lit .nether-lamp-flame { animation: nether-flicker 2.5s ease-in-out infinite; }
 .nether-lamp.unlit { opacity: 0.5; }
@@ -18194,9 +18201,15 @@ toggleFriend = function(id) {
 
         </div>
 
-        <div class="nav-item" data-nav="military" onclick="navigateTo('military')">
+        <div class="nav-item" data-nav="military" onclick="navigateTo('military')" id="nav-military-entry" style="display:none;">
 
           <svg class="icon"><use href="#icon-faction-military"></use></svg><span>军部</span>
+
+        </div>
+
+        <div class="nav-item" data-nav="factionhub" onclick="navigateTo('factionhub')" id="nav-factionhub-entry" style="display:none;">
+
+          <svg class="icon"><use href="#icon-faction-emperor"></use></svg><span id="nav-factionhub-label">阵营功能</span>
 
         </div>
 
@@ -18798,6 +18811,239 @@ const FACTION_ORGANIZATIONS = {
   ]
 
 };
+
+
+// ---------- 阵营功能系统数据 ----------
+var FACTION_HUB_DATA = {
+  emperor: {
+    title: '帝 国 皇 室',
+    subtitle: '天秤之主 · 正义之神的血脉',
+    icon: 'icon-faction-emperor',
+    color: '#d4b87a',
+    tabs: [
+      { id: 'structure', label: '皇室架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '天平试炼' }
+    ],
+    structure: [
+      { name: '天平议会', icon: '♛', color: '#d4b87a', desc: '皇室最高决策机构，由皇帝、皇后、成年皇子公主及三位守护骑士组成。负责内政决策与阵营协调。每一次会议都在天平图腾下举行——任何偏私的决议都会导致议会厅的天平倾斜。', members: '皇帝·皇后·成年皇族·三守护骑士', func: '内政决策·阵营协调·仲裁最高争议' },
+      { name: '守护骑士团', icon: '🛡', color: '#c0a060', desc: '三位守护骑士由皇帝从各阵营中挑选，必须是对"正义"有独特理解且被正义之神认可的非皇族强者。不受阵营约束，只效忠皇帝——更确切地说，只效忠"公正"这一理念本身。', members: '仅三人', func: '皇室安全·天平裁决执行·皇帝最后防线' },
+      { name: '内务府', icon: '📜', color: '#b8985a', desc: '管理皇室领地、财富和日常事务。天秤圣域的每一颗明珠、每一块金砖都在内务府的账册上。同时负责皇室成员的教育与培养——包括情感剥离训练。', members: '总管一名·分管十二处', func: '领地管理·财富运营·皇族教育' },
+      { name: '外交总署', icon: '🤝', color: '#d0b070', desc: '与六大阵营的官方沟通与协议签署。每天都在做一件不可能的事——让七个互不信任的势力坐在同一张桌子前。外交官的口头禅是"我们理解贵方立场"。', members: '总署长·六席特使', func: '阵营外交·协议签署·冲突调停' },
+      { name: '枢密院', icon: '📖', color: '#c8a858', desc: '皇室顾问和学者组成的智囊团，负责政策建议与历史研究。同时承担着最隐秘的职责——监控"双锁共振"的稳定性，记录皇帝体内封印的每一次异常脉冲。', members: '枢密使·学士·史官', func: '政策建议·封印监控·历史编纂' }
+    ],
+    activities: [
+      { id: 'emp_trial', name: '天平试炼', desc: '接受正义之神的审视。天平将称量你的灵魂——你的每一次偏私、每一份私心、每一丝情感用事，都会让天平倾斜。通过试炼者将获得"神血认证"。', xp: 50, minLevel: 1, cooldown: '每日一次', risk: '失败将遭受异能反噬，当日阵营声望-10' },
+      { id: 'emp_seal', name: '封印观测', desc: '前往枢密院封印观测室，查看皇帝体内原初幽浮封印的最新状态。数据每十二小时更新一次。观测封印脉冲是一种……不太愉快的体验。', xp: 20, minLevel: 1, cooldown: '每12小时', risk: '观测可能导致短暂的耳鸣和幻听' },
+      { id: 'emp_diplomacy', name: '阵营调停', desc: '以外交总署特使身份，参与一次阵营间的矛盾调停。成功调停将极大提升皇室声望。但请记住——各阵营给皇室面子，不代表他们真的在乎皇室。', xp: 80, minLevel: 3, cooldown: '每周一次', risk: '调停失败将同时得罪两方阵营' },
+      { id: 'emp_knight', name: '守护骑士选拔', desc: '【仅限达到"总署总管"以上职级者】参与守护骑士选拔考核。考核内容：在模拟极端情境下做出绝对公正的裁决。你的情感将被完全剥离——暂时的。也许。', xp: 200, minLevel: 5, cooldown: '每月一次', risk: '考核过程中的情感剥离有3%概率不可逆' }
+    ]
+  },
+
+  court: {
+    title: '秩 序 法 庭',
+    subtitle: '纯白天平 · 律法即一切',
+    icon: 'icon-faction-court',
+    color: '#c0c8d0',
+    tabs: [
+      { id: 'structure', label: '法庭架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '审判庭' }
+    ],
+    structure: [
+      { name: '九席枢机庭', icon: '⚖', color: '#c0c8d0', desc: '最高裁判所，九位枢机大法官组成，首席枢机兼任帝国最高司法官。每一次开庭，九席按"纯白序列"入座——座位本身就是一道法律程序。任何程序瑕疵都将导致判决无效。', members: '首席枢机·八席枢机', func: '最高司法·终审裁决·法典解释' },
+      { name: '巡回法庭', icon: '🏛', color: '#b0b8c0', desc: '驻扎各星环与战区的日常司法机构。巡回法官们乘坐"律法方舟"在星环间穿行，将正义带到帝国的每一个角落。至少在文件上是这样的。', members: '巡回法官·书记官·执律官', func: '日常司法·基层审判·纠纷调解' },
+      { name: '异端审判庭', icon: '🔥', color: '#d0d0d8', desc: '处理"信仰不纯"案件——指控信徒偏离教义或私下敬拜未认可神明。审判庭的地下审讯室永远弥漫着一股淡淡的檀香味，用来掩盖其他的味道。', members: '审判长·审判官·拷问官', func: '信仰审查·异端审判·教义维护' },
+      { name: '律法编纂院', icon: '📚', color: '#b8c0c8', desc: '修订、解释和扩充帝国法典。现行《穹顶律典》共十二卷，七千余条。编纂院的学者们终其一生只做一件事——让每一条法律都无懈可击。然后发现新的漏洞。', members: '编纂学士·律法学者·见习编纂员', func: '法典修订·法律解释·判例汇编' },
+      { name: '铁律使', icon: '⚔', color: '#a8b0b8', desc: '仲裁执行部，武装司法部队。全员异能者，战力不亚于军部精锐。铁律使的任务只有一个——确保判决得到执行。不管用什么方式。', members: '铁律统领·大队长·铁律使', func: '逮捕押送·执行判决·武力司法' }
+    ],
+    activities: [
+      { id: 'court_trial', name: '模拟审判', desc: '参与一次模拟法庭审判。你将随机分配到一个案件——可能是下城区的盗窃案，也可能是上城区的政治丑闻。你需要根据《穹顶律典》做出公正的判决。', xp: 40, minLevel: 1, cooldown: '每日一次', risk: '判决偏离律法条文将导致声望降低' },
+      { id: 'court_codex', name: '律典研习', desc: '深入研读《穹顶律典》。七千余条法条，每一条都有其存在的理由。研习过程中你会逐渐理解——法律不是完美的，但它是秩序的唯一保障。', xp: 25, minLevel: 1, cooldown: '每8小时', risk: '长时间研读可能导致共情能力暂时下降' },
+      { id: 'court_heretic', name: '异端审查', desc: '【需审判官以上】参与一次异端信仰审查。审查对象可能是任何阵营的信徒。你需要判断他们的信仰是否"纯粹"。请记住——你的判断将改变一个人的一生。', xp: 60, minLevel: 3, cooldown: '每三天', risk: '接触异端思想可能导致自身信仰动摇' },
+      { id: 'court_execute', name: '铁律行动', desc: '【需执律官以上】随铁律使执行一次逮捕任务。目标可能是逃犯、异端、或拒绝服从判决的公民。铁律使的铁律只有一条——判决必须执行。', xp: 100, minLevel: 4, cooldown: '每周一次', risk: '武力执法可能导致不可逆的共情能力丧失' }
+    ]
+  },
+
+  fate: {
+    title: '命 运 教 廷',
+    subtitle: '千面之眼 · 看见即诅咒',
+    icon: 'icon-faction-fate',
+    color: '#8866aa',
+    tabs: [
+      { id: 'structure', label: '教廷架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '预言仪式' }
+    ],
+    structure: [
+      { name: '预言司', icon: '◈', color: '#8866aa', desc: '负责帝国层面重大命运观测。预言师们日夜轮班，在"千面圣殿"深处窥视命运的纹路。他们定期向各阵营发布"命途简讯"——内容晦涩如诗，因为说得太清楚，预言就会失效。', members: '大预言师·预言师·见习预言师', func: '命运观测·预言发布·大势推演' },
+      { name: '牧灵司', icon: '🕯', color: '#9678b8', desc: '负责基层教区管理，主持人生节点仪式——出生祝福、成年占卜、婚配命合、临终引导。牧师是普通人一生中接触最多的教廷成员。', members: '大主教·主教·牧师·执事', func: '教区管理·人生仪式·信徒引导' },
+      { name: '圣典司', icon: '📜', color: '#7a5a9c', desc: '整理、记录和诠释历代预言，编写《千面圣典》。每一份预言都被仔细记录、分类、比对——圣典司的学者们试图从浩如烟海的预言中找出命运的规律。', members: '圣典学士·抄录员·考据员', func: '预言记录·圣典编纂·命运研究' },
+      { name: '千面圣殿', icon: '⛩', color: '#a080c0', desc: '教廷总部，位于千面迷宫最深处。外来者永远找不到入口——除非你的目的地本来就是"迷路"。圣殿内部没有窗户，只有无尽的黑暗。但对盲眼者来说，那就是星空。', members: '至高教宗·枢机团', func: '教廷中枢·最高预言·神明沟通' }
+    ],
+    activities: [
+      { id: 'fate_daily', name: '每日一卦', desc: '进行每日命运观测。你将看到一段模糊的预言碎片——可能是关于你自己的，也可能是关于这个世界的。预言消耗生命力。看得越深，命越短。', xp: 30, minLevel: 1, cooldown: '每日一次', risk: '每次观测微量消耗寿命（游戏中表现为随机减益）' },
+      { id: 'fate_prophecy', name: '命途简讯', desc: '查阅预言司最新发布的命途简讯。这些晦涩的文字背后隐藏着帝国未来的走向。只有真正的预言师才能完全理解其中的含义。', xp: 15, minLevel: 1, cooldown: '每6小时', risk: '过度解读简讯可能导致宿命论倾向加深' },
+      { id: 'fate_thread', name: '命运丝线观测', desc: '【需牧师以上】使用"命运丝线"能力，观测两个实体之间的因果关联。你会看到人与人之间的联系——那些肉眼不可见的、缠绕在每个人身上的命运之线。', xp: 55, minLevel: 3, cooldown: '每两天', risk: '窥视因果可能引发"知而不能改"的绝望感' },
+      { id: 'fate_deep', name: '深层预言', desc: '【需主教以上】进入千面圣殿深层，进行一次深度命运观测。你可能会看到帝国的命运、封印的命运、甚至神明的命运。但请记住——有些东西，看到了就再也无法忘记。', xp: 120, minLevel: 5, cooldown: '每周一次', risk: '深层预言大幅消耗寿命，且可能看到令人崩溃的真相' }
+    ]
+  },
+
+  yao: {
+    title: '药 王 教',
+    subtitle: '永生之母 · 生之执念',
+    icon: 'icon-faction-yao',
+    color: '#44aa66',
+    tabs: [
+      { id: 'structure', label: '教团架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '地星朝圣' }
+    ],
+    structure: [
+      { name: '十圣徒', icon: '✝', color: '#44aa66', desc: '药王阵营仅存的理性存在。药王天尊在沉睡前将意志分裂为十份，投放到地星血肉菌毯的十个关键节点。他们保持约七成人类理性，胸口有金色裂隙——一旦闭合，将彻底堕入永生尸骸的无意识状态。他们清醒地永生着，这是最残忍的神恩。', members: '十位圣徒·各镇一根地钉', func: '锚点镇守·信徒操控·虫群指挥' },
+      { name: '圣骸集群', icon: '🫀', color: '#3a9858', desc: '地星表面的血肉菌毯，覆盖原欧亚大陆大部分区域。菌毯中心"母巢"聚集着最古老的圣徒遗骸——他们已经完全融入地星生态，沦为无意识的"永生尸骸"。菌毯会缓慢地呼吸、脉动，像一颗星球大小的心脏。', members: '无数永生尸骸', func: '地星锚定·生之执念散发·帝国坐标维持' },
+      { name: '朝圣者', icon: '🚶', color: '#50b874', desc: '极少数尚未完全丧失心智的低阶教徒，在血肉菌毯边缘游荡，执行原始的仪式行为。他们有时会捡起地上的石头放在头顶，有时会对着天空喃喃自语。行动在暗中受十圣徒牵引——只是朝圣者自己不知道。', members: '游荡者·采药人·守祠者', func: '原始仪式·菌毯维护·无意识的锚点辅助' },
+      { name: '苍翠之眼', icon: '🛰', color: '#5ac880', desc: '地星轨道观测站，帝国历312年失联。失联前最后传回的图像是——观测站外壳上长出了植物。没人知道发生了什么。但大多数人倾向于认为：药王的圣骸集群已经"长"到了轨道上。', members: '【已失联】', func: '【已失联】原为轨道观测·现为未知' }
+    ],
+    activities: [
+      { id: 'yao_pilgrim', name: '朝圣仪式', desc: '在苍翠墓园隔离带边缘进行一次朝圣仪式。你会感受到来自地星深处的"生之执念"——那种原始的、不讲道理的、纯粹的"活下去"的欲望。它很温暖。也很可怕。', xp: 30, minLevel: 1, cooldown: '每日一次', risk: '长期接触生之执念可能加速自我意识磨损' },
+      { id: 'yao_resonance', name: '菌毯共鸣', desc: '尝试与血肉菌毯建立精神共鸣。如果成功，你能短暂地"听到"圣骸集群的集体意识——那不是语言，不是思想，而是一种纯粹的、无穷无尽的"存在"。', xp: 45, minLevel: 2, cooldown: '每12小时', risk: '共鸣可能导致短暂的自我边界模糊' },
+      { id: 'yao_heal', name: '生之祝福', desc: '【需守祠者以上】引导药王的"生之执念"，为目标施加超速再生祝福。这是药王教最核心的能力——修复一切伤痛，延续一切生命。代价是……你自己的一部分理智。', xp: 60, minLevel: 2, cooldown: '每两天', risk: '每次使用生之祝福，神志微量损耗' },
+      { id: 'yao_spire', name: '地钉观测', desc: '【需祭司以上】远程观测十根"地钉"的状态。你能看到十圣徒的金色裂隙——有些明亮，有些暗淡。如果某一天某道裂隙彻底闭合……那意味着一根地钉失去了它的"活体螺丝钉"。', xp: 90, minLevel: 4, cooldown: '每周一次', risk: '观测地钉可能被十圣徒的集体意识察觉' }
+    ]
+  },
+
+  hunter: {
+    title: '猎 人 公 会',
+    subtitle: '双面之母 · 生死之间即为猎场',
+    icon: 'icon-faction-hunter',
+    color: '#cc8844',
+    tabs: [
+      { id: 'structure', label: '公会架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '悬赏任务' }
+    ],
+    structure: [
+      { name: '永夜大厅', icon: '🌙', color: '#cc8844', desc: '公会总会，位于永夜渡口星环核心浮岛。无单一领袖，由七位"亡语者"组成的公会议会共同决策。大厅中央燃烧着一盆永不熄灭的蓝色火焰——据说那是冥神留下的火种，能照出谎言。', members: '七位亡语者', func: '公会最高决策·评级审核·契约管理' },
+      { name: '星环分会', icon: '🏠', color: '#b87838', desc: '各星环和中城区设分会，由分会长管理。分会是猎人日常活动的中心——接任务、交任务、喝酒、吹牛、包扎伤口。每个分会都有一面"阵亡猎人墙"。', members: '分会长·登记员·常驻猎人', func: '任务发布·等级注册·日常管理' },
+      { name: '临时接驳站', icon: '⛺', color: '#a06830', desc: '设在下城区和战区附近的临时站点。条件简陋，功能齐全——补给、医疗、情报、甚至临终关怀。接驳站的工作人员都见过太多死亡，所以他们比任何人都珍惜活着。', members: '站长·后勤·流动猎人', func: '前线补给·紧急医疗·情报中转' },
+      { name: '冥界契约所', icon: '📜', color: '#cc8844', desc: '注册猎人可与冥神订立契约——若战死，在特定条件下被拉回现世。代价是失去部分记忆或寿命。每一次"复活"，都会让你失去一些东西。也许是记忆，也许是感情，也许是……你自己。', members: '守灯人·引渡人', func: '契约签订·死亡引渡·记忆保管' }
+    ],
+    activities: [
+      { id: 'hunt_bounty', name: '接取悬赏', desc: '从公会任务榜上随机接取一个悬赏任务。任务难度从E到S不等——E级可能只是跑腿送信，S级则是去猎杀一只可以毁灭城市的异种。量力而行。', xp: 40, minLevel: 1, cooldown: '每日一次', risk: '高难度任务有概率失败并损失声望' },
+      { id: 'hunt_track', name: '亡魂追踪', desc: '使用"亡魂视界"能力，追踪一个目标的死亡烙印。你能看到死者最后时刻的情感残留——恐惧、愤怒、不甘、或者……平静。', xp: 25, minLevel: 1, cooldown: '每8小时', risk: '过度接触亡魂烙印可能导致存在感稀薄' },
+      { id: 'hunt_nether', name: '冥界巡查', desc: '【需铜级以上】在生死缝隙中巡查，检查是否有异常的亡魂活动。这项工作很危险——你可能会分不清自己是活着还是死了。', xp: 65, minLevel: 3, cooldown: '每三天', risk: '长时间游走生死边缘会加速存在感"稀薄化"' },
+      { id: 'hunt_srank', name: 'S级委托', desc: '【需金级以上】参与一次S级悬赏任务。目标是A级以上的异种或极度危险的通缉犯。生还率不足四成。但报酬……足以让你在下城区买一栋楼。', xp: 150, minLevel: 5, cooldown: '每月一次', risk: 'S级任务死亡率超过六成' }
+    ]
+  },
+
+  void: {
+    title: '虚 妄 教 廷',
+    subtitle: '迷雾之主 · 真实即苦痛',
+    icon: 'icon-faction-void',
+    color: '#aabbcc',
+    tabs: [
+      { id: 'structure', label: '教廷架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '安眠仪式' }
+    ],
+    structure: [
+      { name: '雾中圣者', icon: '👤', color: '#aabbcc', desc: '名义领袖，无人见过真身。传说祂是第一个被虚妄之神"彻底吞噬"的人类，成为神明意志的现世口舌。指令以"圣者低语"不定期传达——那些低语不是声音，而是直接在脑海中出现的意念。', members: '仅一人（也许）', func: '神明意志传达·教廷方向指引' },
+      { name: '大教堂', icon: '⛪', color: '#99aabb', desc: '位于各星环下城区中心，由"牧梦人"主持。提供"安眠仪式"——信徒支付财物或"记忆"以换取幻境。教堂内部永远弥漫着淡淡的甜香，那是须弥蒸发后的味道。', members: '牧梦人·助祭·守卫', func: '安眠仪式·幻境提供·信徒收容' },
+      { name: '街边神龛', icon: '🕯', color: '#8899aa', desc: '遍布下城区角落的小型祭祀点。任何人可随时"啜饮虚妄"——小型短时幻境，代价是一小段记忆。你不会记得你失去了什么——这正是问题的关键。', members: '无固定人员', func: '低阶幻境·记忆收集·须弥分销' },
+      { name: '迷雾行者', icon: '🌀', color: '#b8c8d8', desc: '少数保持清醒的神职者，负责在信徒"彻底空壳化"前回收其身体。他们游走在幻境与现实的边界，见过太多空壳——那些行走的幸福微笑。他们是教廷中唯一还"清醒"的人。', members: '行者·巡查员', func: '空壳回收·边界巡查·现实锚定' }
+    ],
+    activities: [
+      { id: 'void_dream', name: '幻境体验', desc: '在街边神龛进行一次短时幻境体验。你会看到一个美好的世界——也许是你的童年，也许是你从未拥有过的幸福。代价是一小段记忆。你不会记得你失去了什么。', xp: 20, minLevel: 1, cooldown: '每日一次', risk: '每次幻境体验将永久失去一小段随机记忆' },
+      { id: 'void_whisper', name: '圣者低语聆听', desc: '在大教堂中静候"圣者低语"。那些低语不是声音——它们直接在你的脑海中响起，像是你自己的思想，但你知道那不是你。聆听者需要在低语结束后立即记录内容，否则将遗忘。', xp: 35, minLevel: 1, cooldown: '每12小时', risk: '过度接触圣者低语可能导致自我认知模糊' },
+      { id: 'void_weave', name: '记忆编织', desc: '【需神龛看守以上】使用"记忆编织"能力，将收集到的记忆碎片编织成新的幻境。这是一门精细的手艺——每一段记忆都有其独特的情感和色彩。', xp: 55, minLevel: 3, cooldown: '每两天', risk: '编织他人记忆可能导致自己的记忆混乱' },
+      { id: 'void_deep', name: '深层迷雾潜行', desc: '【需牧梦人以上】进入虚妄深层——那片连迷雾行者也不敢轻易踏足的领域。在那里，现实与幻境的边界完全消失。你可能会看到真相，也可能永远留在那里。', xp: 110, minLevel: 4, cooldown: '每周一次', risk: '深层潜行有5%概率无法返回（角色暂时锁定24小时）' }
+    ]
+  },
+
+  pleasure: {
+    title: '极 乐 城',
+    subtitle: '绯色女王 · 欢愉即信仰',
+    icon: 'icon-faction-pleasure',
+    color: '#cc4488',
+    tabs: [
+      { id: 'structure', label: '极乐城架构' },
+      { id: 'ranks', label: '职级图鉴' },
+      { id: 'activities', label: '欲望交易所' }
+    ],
+    structure: [
+      { name: '绯色女王', icon: '👑', color: '#cc4488', desc: '极乐城唯一统治者，由欲望之神亲自指定，终身任职，名义上是神的"新娘/新郎"。没人知道绯色女王的真实面貌——她每次公开露面都会换一张脸。或者说，她没有"真实"的脸。', members: '仅一人', func: '极乐城最高统治·神明旨意传达' },
+      { name: '七欲之席', icon: '🔥', color: '#d05898', desc: '七位"欲望代理人"，分别对应七种核心欲望——饕餮、贪婪、傲慢、暴怒、色欲、嫉妒、怠惰。各管理极乐城一个区域。他们之间明争暗斗从未停止——毕竟，欲望的本质就是永不满足。', members: '七位欲望代理人', func: '区域管理·欲望引导·内部博弈' },
+      { name: '欢愉殿堂', icon: '🏛', color: '#c03878', desc: '极乐城核心建筑，由无数交织廊桥、平台和珠帘构成，永远漂浮在星舰中心。殿堂内部是一个不断变换的空间——你每次走进来，都会看到不同的景象。', members: '主理人·表演者·服务者', func: '核心娱乐·大型仪式·极乐城象征' },
+      { name: '欲望交易所', icon: '💎', color: '#b82868', desc: '极乐城的"货币"不是金钱，而是"感受"。信徒出售感官体验换取更刺激的欢愉，制成"体验结晶"流通。一颗高纯度的"初恋悸动结晶"在黑市上可以换到下城区一栋楼。', members: '结晶师·鉴定师·交易商', func: '体验结晶交易·感官市场·欲望流通' },
+      { name: '痛苦工坊', icon: '⚒', color: '#a81858', desc: '将痛苦转化为欢愉的场所。工坊的"技师"们能够将任何形式的痛苦——肉体的、精神的、情感的——提炼、转化、包装成纯粹的欢愉。这是极乐城最核心的技术。也是最黑暗的。', members: '工坊主·技师·原料提供者', func: '痛苦转化·欢愉提炼·暗黑技术支持' }
+    ],
+    activities: [
+      { id: 'pls_trade', name: '体验结晶交易', desc: '在欲望交易所进行一次体验结晶交易。你可以出售自己的感官体验（快乐、悲伤、恐惧、爱恋……），也可以购买他人的。每一颗结晶都是一段被封装的人生。', xp: 30, minLevel: 1, cooldown: '每日一次', risk: '过度出售自身体验可能导致感官迟钝' },
+      { id: 'pls_feast', name: '欢愉殿堂游览', desc: '进入欢愉殿堂，体验极乐城最顶级的娱乐。你会看到不可思议的表演、品尝无法想象的美食、听到直击灵魂的音乐。一切都太美好了——美好到让你不想离开。', xp: 25, minLevel: 1, cooldown: '每8小时', risk: '每次游览欢愉殿堂，离开后的空虚感会增加' },
+      { id: 'pls_forge', name: '痛苦转化体验', desc: '【需服务者以上】在痛苦工坊中体验一次痛苦-欢愉转化。技师会将你的一段痛苦记忆转化为纯粹的欢愉。过程……不太好受。但结果……让人上瘾。', xp: 50, minLevel: 3, cooldown: '每三天', risk: '痛苦转化有概率造成永久性感官错乱' },
+      { id: 'pls_seven', name: '七欲挑战', desc: '【需欢愉主理人以上】接受七欲之席的挑战——连续体验七种极端欲望（饕餮、贪婪、傲慢、暴怒、色欲、嫉妒、怠惰），在每一次欲望中保持最后一丝自我。通过者将获得七欲之席的认可。', xp: 130, minLevel: 5, cooldown: '每月一次', risk: '七欲挑战失败者将成为"燃尽者"——永远无法再感受快乐' }
+    ]
+  }
+};
+
+// ---------- 阵营积分系统 ----------
+var FACTION_XP_THRESHOLDS = [0, 100, 300, 600, 1000, 1600, 2500, 4000, 6000];
+
+var getFactionXP = function(factionId) {
+  var allXP = loadData('starnet_faction_xp', {});
+  if (!allXP[factionId]) allXP[factionId] = 0;
+  return allXP[factionId];
+};
+
+var addFactionXP = function(factionId, amount) {
+  var allXP = loadData('starnet_faction_xp', {});
+  if (!allXP[factionId]) allXP[factionId] = 0;
+  allXP[factionId] += amount;
+  saveData('starnet_faction_xp', allXP);
+  return allXP[factionId];
+};
+
+var getFactionLevel = function(factionId) {
+  var xp = getFactionXP(factionId);
+  var level = 1;
+  for (var i = FACTION_XP_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (xp >= FACTION_XP_THRESHOLDS[i]) { level = i + 1; break; }
+  }
+  return level;
+};
+
+var getFactionLevelProgress = function(factionId) {
+  var xp = getFactionXP(factionId);
+  var level = getFactionLevel(factionId);
+  var maxLevel = FACTION_XP_THRESHOLDS.length;
+  if (level >= maxLevel) return { current: xp, needed: 0, percent: 100, level: level, maxLevel: maxLevel };
+  var currentBase = FACTION_XP_THRESHOLDS[level - 1];
+  var nextThreshold = FACTION_XP_THRESHOLDS[level];
+  var progress = xp - currentBase;
+  var needed = nextThreshold - currentBase;
+  var percent = Math.min(100, Math.round((progress / needed) * 100));
+  return { current: progress, needed: needed, percent: percent, level: level, maxLevel: maxLevel };
+};
+
+// 阵营功能活动冷却记录
+var getFactionActivityCooldown = function(activityId) {
+  var cooldowns = loadData('starnet_faction_cooldowns', {});
+  return cooldowns[activityId] || 0;
+};
+
+var setFactionActivityCooldown = function(activityId, hours) {
+  var cooldowns = loadData('starnet_faction_cooldowns', {});
+  cooldowns[activityId] = Date.now() + (hours * 3600000);
+  saveData('starnet_faction_cooldowns', cooldowns);
+};
+
+var isFactionActivityReady = function(activityId) {
+  return Date.now() >= getFactionActivityCooldown(activityId);
+};
+
+
+
 
 
 
@@ -20974,6 +21220,7 @@ async function _baseEnterMainApp() {
   // 设置阵营主题
 
   document.body.className = 'faction-' + ((typeof getCurrentFaction === 'function') ? getCurrentFaction() : (user.faction || 'military'));
+  if (typeof updateFactionHubNav === 'function') updateFactionHubNav();
 
   
 
@@ -21225,11 +21472,30 @@ function renderPage(navId, param) {
 
       break;
 
-    case 'military':
+    case 'factionhub':
 
-      if (typeof renderMilitaryPage === 'function') renderMilitaryPage();
+      if (typeof renderFactionHubPage === 'function') renderFactionHubPage();
 
       else renderForumPage();
+
+      break;
+
+    case 'military':
+
+      // 军部入口只允许 military 阵营
+      if (getCurrentFaction() === 'military') {
+
+        if (typeof renderMilitaryPage === 'function') renderMilitaryPage();
+
+        else renderForumPage();
+
+      } else {
+
+        if (typeof renderFactionHubPage === 'function') renderFactionHubPage();
+
+        else renderForumPage();
+
+      }
 
       break;
 
@@ -37353,6 +37619,72 @@ navigateTo = function(navId, param) {
 
 };
 
+// ---------- 获取阵营功能入口信息 ----------
+var getFactionHubEntry = function() {
+  var factionId = getCurrentFaction();
+  var navInfo = FACTION_HUB_NAV_NAMES[factionId];
+  if (!navInfo) return null;
+  return {
+    factionId: factionId,
+    label: navInfo.label,
+    icon: navInfo.icon,
+    color: (FACTION_HUB_DATA[factionId] || {}).color || '#00e5ff'
+  };
+};
+
+// ---------- 阵营功能入口可见性控制 ----------
+var updateFactionHubNav = function() {
+  try {
+    var factionId = getCurrentFaction();
+    var isMilitary = factionId === 'military';
+
+    // PC侧边栏
+    var militaryEntry = document.getElementById('nav-military-entry');
+    var hubEntry = document.getElementById('nav-factionhub-entry');
+    var hubLabel = document.getElementById('nav-factionhub-label');
+    var hubIcon = hubEntry ? hubEntry.querySelector('use') : null;
+
+    if (isMilitary) {
+      if (militaryEntry) militaryEntry.style.display = '';
+      if (hubEntry) hubEntry.style.display = 'none';
+    } else {
+      if (militaryEntry) militaryEntry.style.display = 'none';
+      if (hubEntry) {
+        hubEntry.style.display = '';
+        var navInfo = FACTION_HUB_NAV_NAMES[factionId];
+        if (navInfo) {
+          if (hubLabel) hubLabel.textContent = navInfo.label;
+          if (hubIcon) hubIcon.setAttribute('href', '#' + navInfo.icon);
+        }
+      }
+    }
+
+    // 移动端更多菜单
+    var mobMilitary = document.getElementById('mobile-military-entry');
+    var mobHub = document.getElementById('mobile-factionhub-entry');
+    var mobLabel = document.getElementById('mobile-factionhub-label');
+    var mobIcon = mobHub ? mobHub.querySelector('use') : null;
+
+    if (isMilitary) {
+      if (mobMilitary) mobMilitary.style.display = '';
+      if (mobHub) mobHub.style.display = 'none';
+    } else {
+      if (mobMilitary) mobMilitary.style.display = 'none';
+      if (mobHub) {
+        mobHub.style.display = '';
+        var navInfo2 = FACTION_HUB_NAV_NAMES[factionId];
+        if (navInfo2) {
+          if (mobLabel) mobLabel.textContent = navInfo2.label;
+          if (mobIcon) mobIcon.setAttribute('href', '#' + navInfo2.icon);
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('updateFactionHubNav error:', e);
+  }
+};
+
+
 
 
 // ===== Recovered functions from backup =====
@@ -39893,6 +40225,7 @@ switchFaction = function(factionId) {
   }
   
   showToast('阵营已切换至 ' + FACTIONS_DATA[factionId].name, 'success');
+  if (typeof updateFactionHubNav === 'function') updateFactionHubNav();
 }
 
 toggleFavorite = function(username, itemId, itemType) {
@@ -41009,6 +41342,347 @@ var confirmEnrollAcademy = function(academyId) {
   }
   renderMilitaryPage();
 };
+
+
+// ---------- 阵营功能页面通用渲染 ----------
+var FACTION_HUB_NAV_NAMES = {
+  emperor: { label: '皇室', icon: 'icon-faction-emperor' },
+  court: { label: '法庭', icon: 'icon-faction-court' },
+  military: { label: '军部', icon: 'icon-faction-military' },
+  fate: { label: '教廷', icon: 'icon-faction-fate' },
+  yao: { label: '药王', icon: 'icon-faction-yao' },
+  hunter: { label: '公会', icon: 'icon-faction-hunter' },
+  void: { label: '虚妄', icon: 'icon-faction-void' },
+  pleasure: { label: '极乐', icon: 'icon-faction-pleasure' }
+};
+
+var renderFactionHubPage = function() {
+  var content = document.getElementById('page-content');
+  if (!content) return;
+
+  var factionId = getCurrentFaction();
+
+  // 军部走独立页面
+  if (factionId === 'military') {
+    if (typeof renderMilitaryPage === 'function') { renderMilitaryPage(); return; }
+  }
+
+  var hubData = FACTION_HUB_DATA[factionId];
+  if (!hubData) {
+    content.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-dim);">当前阵营暂无专属功能</div>';
+    return;
+  }
+
+  var currentTab = STATE.factionHubTab || 'structure';
+  var fc = hubData.color;
+
+  var html = '<div class="page-header">';
+  html += '<div class="page-title">' + hubData.title + '</div>';
+  html += '<div style="font-size:0.8rem;color:var(--text-dim);font-family:var(--font-mono);">' + hubData.subtitle + '</div>';
+  html += '</div>';
+
+  // 职级进度条
+  var prog = getFactionLevelProgress(factionId);
+  var ranks = FACTION_RANKS[factionId] || [];
+  var currentRank = null;
+  for (var ri = 0; ri < ranks.length; ri++) {
+    if (ranks[ri].level <= prog.level) currentRank = ranks[ri];
+  }
+  var nextRank = null;
+  for (var rn = ranks.length - 1; rn >= 0; rn--) {
+    if (ranks[rn].level > prog.level) { nextRank = ranks[rn]; break; }
+  }
+
+  html += '<div style="margin-bottom:1.2rem;padding:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-left:3px solid ' + fc + ';">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">';
+  html += '<div>';
+  html += '<span style="font-size:0.85rem;font-weight:600;color:' + fc + ';">' + (currentRank ? currentRank.title : '未知') + '</span>';
+  if (currentRank && currentRank.subtitle) html += '<span style="font-size:0.72rem;color:var(--text-dim);margin-left:0.5rem;">' + currentRank.subtitle + '</span>';
+  html += '</div>';
+  html += '<span style="font-size:0.75rem;color:var(--text-dim);font-family:var(--font-mono);">Lv.' + prog.level + ' / ' + prog.maxLevel + '</span>';
+  html += '</div>';
+
+  // 进度条
+  html += '<div style="width:100%;height:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);margin-bottom:0.4rem;">';
+  html += '<div style="height:100%;width:' + prog.percent + '%;background:' + fc + ';transition:width 0.5s ease;box-shadow:0 0 6px ' + fc + '44;"></div>';
+  html += '</div>';
+  html += '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);">';
+  html += '<span>贡献值：' + getFactionXP(factionId) + '</span>';
+  if (nextRank) {
+    html += '<span>下一职级：' + nextRank.title + '（还需 ' + (prog.needed - prog.current) + ' 贡献值）</span>';
+  } else {
+    html += '<span>已达最高职级</span>';
+  }
+  html += '</div>';
+  html += '</div>';
+
+  // Tab切换
+  html += '<div style="display:flex;gap:0.5rem;margin-bottom:1.2rem;border-bottom:1px solid var(--border-color);padding-bottom:0.6rem;">';
+  for (var t = 0; t < hubData.tabs.length; t++) {
+    var tab = hubData.tabs[t];
+    html += '<button class="btn btn-sm' + (currentTab === tab.id ? ' btn-gold' : '') + '" onclick="switchFactionHubTab(\'' + tab.id + '\')">' + tab.label + '</button>';
+  }
+  html += '</div>';
+
+  if (currentTab === 'structure') {
+    html += renderFactionStructureTab(factionId);
+  } else if (currentTab === 'ranks') {
+    html += renderFactionRanksTab(factionId);
+  } else if (currentTab === 'activities') {
+    html += renderFactionActivitiesTab(factionId);
+  }
+
+  content.innerHTML = html;
+};
+
+var switchFactionHubTab = function(tab) {
+  STATE.factionHubTab = tab;
+  renderFactionHubPage();
+};
+
+// ---------- 架构Tab ----------
+var renderFactionStructureTab = function(factionId) {
+  var hubData = FACTION_HUB_DATA[factionId];
+  if (!hubData) return '';
+  var fc = hubData.color;
+  var html = '';
+
+  html += '<div style="margin-bottom:1.5rem;padding:1rem;background:var(--bg-secondary);border-left:3px solid ' + fc + ';">';
+  var fInfo = FACTION_INFO[factionId] || {};
+  html += '<div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8;">' + (fInfo.summary || '') + '</div>';
+  html += '</div>';
+
+  for (var i = 0; i < hubData.structure.length; i++) {
+    var org = hubData.structure[i];
+    html += '<div style="margin-bottom:1rem;padding:1.2rem;background:var(--bg-card);border:1px solid var(--border-color);border-left:3px solid ' + org.color + ';">';
+
+    html += '<div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.8rem;">';
+    html += '<div style="font-size:1.8rem;width:3rem;height:3rem;display:flex;align-items:center;justify-content:center;background:' + org.color + '15;border:1px solid ' + org.color + '33;">' + org.icon + '</div>';
+    html += '<div>';
+    html += '<div style="font-size:1.05rem;font-weight:600;color:' + org.color + ';">' + org.name + '</div>';
+    html += '<div style="font-size:0.75rem;color:var(--text-dim);">' + org.members + '</div>';
+    html += '</div></div>';
+
+    html += '<div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.8;margin-bottom:0.8rem;">' + org.desc + '</div>';
+
+    html += '<div style="font-size:0.78rem;padding:0.4rem 0;border-top:1px dashed var(--border-color);"><span style="color:var(--text-dim);">职能：</span>' + org.func + '</div>';
+
+    html += '</div>';
+  }
+
+  return html;
+};
+
+// ---------- 职级图鉴Tab ----------
+var renderFactionRanksTab = function(factionId) {
+  var hubData = FACTION_HUB_DATA[factionId];
+  if (!hubData) return '';
+  var fc = hubData.color;
+  var ranks = FACTION_RANKS[factionId] || [];
+  var currentLevel = getFactionLevel(factionId);
+  var html = '';
+
+  // 当前等级卡片
+  var prog = getFactionLevelProgress(factionId);
+  html += '<div style="margin-bottom:1.5rem;padding:1.2rem;background:var(--bg-card);border:2px solid ' + fc + ';text-align:center;">';
+  html += '<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.3rem;letter-spacing:0.15em;font-family:var(--font-mono);">当前职级</div>';
+  html += '<div style="font-size:1.5rem;font-weight:700;color:' + fc + ';margin-bottom:0.3rem;">Lv.' + prog.level + '</div>';
+  var curRank = null;
+  for (var ci = 0; ci < ranks.length; ci++) { if (ranks[ci].level <= prog.level) curRank = ranks[ci]; }
+  if (curRank) {
+    html += '<div style="font-size:1rem;color:var(--text-primary);font-weight:600;">' + curRank.title + '</div>';
+    html += '<div style="font-size:0.78rem;color:var(--text-dim);">' + curRank.subtitle + '</div>';
+  }
+  html += '<div style="margin-top:0.8rem;width:80%;margin-left:auto;margin-right:auto;height:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);">';
+  html += '<div style="height:100%;width:' + prog.percent + '%;background:' + fc + ';transition:width 0.5s ease;box-shadow:0 0 8px ' + fc + '44;"></div>';
+  html += '</div>';
+  html += '<div style="font-size:0.72rem;color:var(--text-dim);margin-top:0.3rem;">' + prog.current + ' / ' + prog.needed + ' 贡献值</div>';
+  html += '</div>';
+
+  // 完整职级列表
+  html += '<div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:0.8rem;letter-spacing:0.1em;">完整职级体系</div>';
+
+  var sortedRanks = ranks.slice().sort(function(a, b) { return b.level - a.level; });
+  for (var i = 0; i < sortedRanks.length; i++) {
+    var rank = sortedRanks[i];
+    var isCurrentRank = rank.level <= currentLevel;
+    var isNext = rank.level === currentLevel + 1;
+    var borderColor = isCurrentRank ? fc : 'var(--border-color)';
+    var bgColor = isCurrentRank ? fc + '08' : 'var(--bg-card)';
+    var opacity = isCurrentRank ? '1' : (isNext ? '0.8' : '0.5');
+
+    html += '<div style="display:flex;align-items:center;gap:1rem;padding:0.8rem 1rem;margin-bottom:0.4rem;background:' + bgColor + ';border:1px solid ' + borderColor + ';opacity:' + opacity + ';">';
+
+    // 等级标记
+    html += '<div style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:0.85rem;font-weight:700;color:' + (isCurrentRank ? fc : 'var(--text-dim)') + ';border:1px solid ' + (isCurrentRank ? fc : 'var(--border-color)') + ';background:' + (isCurrentRank ? fc + '15' : 'transparent') + ';">' + rank.level + '</div>';
+
+    // 信息
+    html += '<div style="flex:1;">';
+    html += '<div style="font-size:0.9rem;font-weight:600;color:' + (isCurrentRank ? fc : 'var(--text-secondary)') + ';">' + rank.title + '</div>';
+    html += '<div style="font-size:0.72rem;color:var(--text-dim);">' + rank.subtitle + '</div>';
+    html += '</div>';
+
+    // 状态标记
+    if (rank.level <= currentLevel) {
+      html += '<span style="font-size:0.7rem;color:' + fc + ';font-weight:600;">✓ 已达成</span>';
+    } else if (isNext) {
+      html += '<span style="font-size:0.7rem;color:var(--gold);">→ 进行中</span>';
+    } else {
+      html += '<span style="font-size:0.7rem;color:var(--text-dim);">🔒</span>';
+    }
+
+    // 侵蚀率
+    if (rank.erosionRate !== undefined && rank.erosionRate > 0) {
+      html += '<span style="font-size:0.65rem;color:#cc4444;opacity:0.7;" title="信仰侵蚀速率">侵蚀 ' + Math.round(rank.erosionRate * 100) + '%</span>';
+    }
+
+    html += '</div>';
+  }
+
+  // 贡献值获取说明
+  html += '<div style="margin-top:1rem;padding:0.8rem;background:var(--bg-secondary);border-left:2px solid ' + fc + '44;">';
+  html += '<div style="font-size:0.75rem;color:var(--text-dim);line-height:1.8;">';
+  html += '📈 通过完成「' + (hubData.tabs[2] ? hubData.tabs[2].label : '专属功能') + '」Tab中的活动获得贡献值。<br>';
+  html += '⚠ 职级提升同时会加深信仰侵蚀——这是神恩的代价，不可逆。<br>';
+  html += '各阵营贡献值独立计算，重铸阵营后原阵营贡献值保留。';
+  html += '</div></div>';
+
+  return html;
+};
+
+// ---------- 专属功能Tab ----------
+var renderFactionActivitiesTab = function(factionId) {
+  var hubData = FACTION_HUB_DATA[factionId];
+  if (!hubData) return '';
+  var fc = hubData.color;
+  var currentLevel = getFactionLevel(factionId);
+  var html = '';
+
+  html += '<div style="margin-bottom:1rem;padding:0.8rem;background:var(--bg-secondary);border-left:2px solid ' + fc + '44;">';
+  html += '<div style="font-size:0.78rem;color:var(--text-dim);line-height:1.8;">完成以下活动可获得阵营贡献值，推动职级晋升。每次活动有冷却时间。职级越高，可解锁的活动越多。</div>';
+  html += '</div>';
+
+  for (var i = 0; i < hubData.activities.length; i++) {
+    var act = hubData.activities[i];
+    var locked = currentLevel < act.minLevel;
+    var ready = isFactionActivityReady(act.id);
+
+    var cardBorder = locked ? 'var(--border-color)' : (ready ? fc : 'var(--border-color)');
+    var cardOpacity = locked ? '0.5' : (ready ? '1' : '0.7');
+
+    html += '<div style="margin-bottom:0.8rem;padding:1rem;background:var(--bg-card);border:1px solid ' + cardBorder + ';border-left:3px solid ' + (locked ? 'var(--border-color)' : fc) + ';opacity:' + cardOpacity + ';">';
+
+    // 头部
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">';
+    html += '<div style="font-size:0.9rem;font-weight:600;color:' + (locked ? 'var(--text-dim)' : fc) + ';">' + act.name + '</div>';
+    html += '<div style="display:flex;gap:0.5rem;align-items:center;">';
+    html += '<span style="font-size:0.68rem;color:var(--gold);font-family:var(--font-mono);">+' + act.xp + ' 贡献</span>';
+    html += '</div></div>';
+
+    // 描述
+    html += '<div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.7;margin-bottom:0.6rem;">' + act.desc + '</div>';
+
+    // 风险
+    if (act.risk) {
+      html += '<div style="font-size:0.72rem;color:#cc4444;opacity:0.8;margin-bottom:0.5rem;padding:0.3rem 0.5rem;background:rgba(204,68,68,0.05);border-left:2px solid rgba(204,68,68,0.3);">⚠ ' + act.risk + '</div>';
+    }
+
+    // 冷却和按钮
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span style="font-size:0.68rem;color:var(--text-dim);">🕐 ' + act.cooldown + '</span>';
+
+    if (locked) {
+      html += '<span style="font-size:0.72rem;color:var(--text-dim);">🔒 需 Lv.' + act.minLevel + '</span>';
+    } else if (!ready) {
+      var remaining = getFactionActivityCooldown(act.id) - Date.now();
+      var hours = Math.floor(remaining / 3600000);
+      var mins = Math.floor((remaining % 3600000) / 60000);
+      html += '<span style="font-size:0.72rem;color:var(--text-dim);">冷却中 ' + hours + 'h' + mins + 'm</span>';
+    } else {
+      html += '<button class="btn btn-sm" onclick="doFactionActivity(\'' + factionId + '\',\'' + act.id + '\')" style="border-color:' + fc + '66;color:' + fc + ';">执 行</button>';
+    }
+    html += '</div>';
+
+    html += '</div>';
+  }
+
+  return html;
+};
+
+// ---------- 执行阵营活动 ----------
+var doFactionActivity = function(factionId, activityId) {
+  var hubData = FACTION_HUB_DATA[factionId];
+  if (!hubData) return;
+
+  var act = null;
+  for (var i = 0; i < hubData.activities.length; i++) {
+    if (hubData.activities[i].id === activityId) { act = hubData.activities[i]; break; }
+  }
+  if (!act) return;
+
+  var currentLevel = getFactionLevel(factionId);
+  if (currentLevel < act.minLevel) {
+    showToast('职级不足，需要 Lv.' + act.minLevel, 'error');
+    return;
+  }
+
+  if (!isFactionActivityReady(act.id)) {
+    showToast('活动冷却中', 'error');
+    return;
+  }
+
+  // 冷却时间映射
+  var cooldownMap = {
+    '每日一次': 24, '每8小时': 8, '每12小时': 12, '每6小时': 6,
+    '每两天': 48, '每三天': 72, '每周一次': 168, '每月一次': 720
+  };
+  var cooldownHours = cooldownMap[act.cooldown] || 24;
+
+  // 记录冷却
+  setFactionActivityCooldown(act.id, cooldownHours);
+
+  // 增加贡献值
+  var oldLevel = getFactionLevel(factionId);
+  var newXP = addFactionXP(factionId, act.xp);
+  var newLevel = getFactionLevel(factionId);
+
+  // 生成结果文案
+  var resultMessages = [
+    '活动完成。',
+    '你感受到了信仰的力量在体内涌动。',
+    '神明注视着你。',
+    '你离深渊又近了一步。',
+    '贡献值+' + act.xp + '。'
+  ];
+
+  var msg = act.name + ' 完成！贡献值+' + act.xp;
+
+  // 升级提示
+  if (newLevel > oldLevel) {
+    var ranks = FACTION_RANKS[factionId] || [];
+    var newRank = null;
+    for (var ri = 0; ri < ranks.length; ri++) { if (ranks[ri].level <= newLevel) newRank = ranks[ri]; }
+    msg += '。🎉 晋升至 Lv.' + newLevel;
+    if (newRank) msg += '「' + newRank.title + '」';
+
+    // 同步职级到个人资料
+    var users = loadData(LS_KEYS.users, {});
+    if (users[STATE.currentUser]) {
+      if (!users[STATE.currentUser].profile) users[STATE.currentUser].profile = {};
+      users[STATE.currentUser].profile.factionRank = newRank ? newRank.title : '';
+      users[STATE.currentUser].profile.factionLevel = newLevel;
+      saveData(LS_KEYS.users, users);
+      if (typeof syncProfileToSupabase === 'function') syncProfileToSupabase();
+    }
+  }
+
+  showToast(msg, 'success', 4000);
+  renderFactionHubPage();
+};
+
+
+
+
 
 
 // ============================================================
@@ -42499,6 +43173,7 @@ var applyFactionRecastResult = function(newFaction) {
 
   if (typeof showToast === 'function') {
     showToast('阵营已重铸为 ' + FACTIONS_DATA[newFaction].name, 'success');
+  if (typeof updateFactionHubNav === 'function') updateFactionHubNav();
   }
 };
 
@@ -44101,11 +44776,19 @@ var renderDossierMineHeader = function() {
 
         </div>
 
-        <div class="more-service-item" onclick="navigateTo('military');toggleMoreMenu();">
+        <div class="more-service-item" onclick="navigateTo('military');toggleMoreMenu();" id="mobile-military-entry" style="display:none;">
 
           <svg class="icon"><use href="#icon-faction-military"></use></svg>
 
           <span>军部</span>
+
+        </div>
+
+        <div class="more-service-item" onclick="navigateTo('factionhub');toggleMoreMenu();" id="mobile-factionhub-entry" style="display:none;">
+
+          <svg class="icon"><use href="#icon-faction-emperor"></use></svg>
+
+          <span id="mobile-factionhub-label">阵营功能</span>
 
         </div>
 
