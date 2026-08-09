@@ -2100,6 +2100,12 @@ body::before {
 
 }
 
+.file-body-full {
+
+  grid-template-columns: 1fr;
+
+}
+
 
 
 @media (max-width: 700px) {
@@ -12762,6 +12768,27 @@ body.darknet-active {
 
 }
 
+/* 星环轨道旋转包装容器 */
+.planet-orbit-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: orbitSpin linear infinite;
+  pointer-events: none;
+}
+.planet-orbit-wrapper .ring-planet {
+  pointer-events: all;
+}
+@keyframes orbitSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes planetCounterSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg) scale(var(--planet-scale, 1)); }
+  to { transform: translate(-50%, -50%) rotate(-360deg) scale(var(--planet-scale, 1)); }
+}
+
 .ring-planet {
 
   position: absolute;
@@ -12784,13 +12811,15 @@ body.darknet-active {
 
   z-index: 5;
 
-  transition: all var(--dur-normal) var(--ease-standard);
+  --planet-scale: 1;
+
+  transition: --planet-scale var(--dur-normal) var(--ease-standard);
 
 }
 
 .ring-planet:hover {
 
-  transform: translate(-50%, -50%) scale(1.4);
+  --planet-scale: 1.4;
 
   z-index: 20;
 
@@ -20495,7 +20524,10 @@ async function _baseInitApp() {
         }, 2000);
       }
       
-enterMainApp();
+      // v4.7.12: 只在首次登录/登录事件时进入主界面，TOKEN_REFRESHED不重复导航
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        enterMainApp();
+      }
 
     } else {
 
@@ -22366,7 +22398,7 @@ function renderMyProfile(profile, user) {
 
 function saveProfile() {
 
-  const fields = $$('.field-value[data-field], .bio-text[data-field]');
+  const fields = $$('[data-field]');
 
   const users = loadData(LS_KEYS.users, {});
 
@@ -22393,7 +22425,10 @@ function saveProfile() {
   
 
   saveData(LS_KEYS.userProfile + '_' + STATE.currentUser, STATE.userProfile);
-  if(STATE.userProfile.faction && user) { user.faction = STATE.userProfile.faction; users[STATE.currentUser] = user; saveData(LS_KEYS.users, users); }
+  if(STATE.userProfile.faction && user) { user.faction = STATE.userProfile.faction; }
+  if(STATE.userProfile.name && user) { user.name = STATE.userProfile.name; }
+  if(STATE.userProfile.codename && user) { user.codename = STATE.userProfile.codename; }
+  if(user) { users[STATE.currentUser] = user; saveData(LS_KEYS.users, users); }
   if(typeof syncProfileToSupabase==='function') syncProfileToSupabase();
 
   showToast('档案已保存', 'success');
@@ -35799,7 +35834,12 @@ showStarRingOverview = function() {
 
     orbitsHtml += '<div class="ring-orbit" style="width:' + sizePct + '%;height:' + sizePct + '%;"></div>';
 
-    planetsHtml += '<div class="ring-planet" style="background:' + ring.color + ';box-shadow:0 0 10px ' + ring.color + '99;top:calc(50% + ' + yPct + '%);left:calc(50% + ' + xPct + '%);transform:translate(-50%,-50%);" onclick=\"enterStarRing(\'' + ring.ringId + '\')\" title="' + ring.name + '"><svg class="icon-16"><use href="#' + ring.icon + '"></use></svg><div class="ring-label">' + ring.name + '</div></div>';
+    var orbitDuration = 30 + i * 8;
+    var planetX = 50 + Math.cos(angle) * 50;
+    var planetY = 50 + Math.sin(angle) * 50;
+    planetsHtml += '<div class="planet-orbit-wrapper" style="width:' + sizePct + '%;height:' + sizePct + '%;animation-duration:' + orbitDuration + 's;">';
+    planetsHtml += '<div class="ring-planet" style="background:' + ring.color + ';box-shadow:0 0 10px ' + ring.color + '99;top:' + planetY + '%;left:' + planetX + '%;transform:translate(-50%,-50%);animation:planetCounterSpin ' + orbitDuration + 's linear infinite;" onclick=\"enterStarRing(\'' + ring.ringId + '\')\" title="' + ring.name + '"><svg class="icon-16"><use href="#' + ring.icon + '"></use></svg><div class="ring-label">' + ring.name + '</div></div>';
+    planetsHtml += '</div>';
 
   });
 
@@ -40671,7 +40711,7 @@ showDossierDetail = function(source, id) {
   html += metaHtml;
   html += '<div style="margin-top:0.5rem;"><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:2px;background:rgba(0,229,255,0.1);color:' + typeColor + ';">' + escapeHtml(typeName) + '</span></div>';
   html += '</div>';
-  html += '<div class="file-body">';
+  html += '<div class="file-body file-body-full">';
   html += '<div class="file-fields" style="width:100%;">' + contentHtml + imagesHtml + '</div>';
   html += '</div>';
   html += '</div>';
