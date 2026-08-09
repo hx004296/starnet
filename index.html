@@ -15926,7 +15926,7 @@ renderUserPublicProfile = function(userId) {
     const fc = getFactionColor('military');
     const fn = getFactionName('military');
     const avatarLetter = userId.charAt(0).toUpperCase();
-    let html = '<div style="margin-bottom:1rem;"><button class="btn btn-sm" onclick="history.back ? history.back() : navigateTo(\x27forum\x27)">◂ 返回</button></div>';
+    let html = '<div style="margin-bottom:1rem;"><button class="btn btn-sm" onclick="navigateBack()">◂ 返回</button></div>';
     html += '<div class="card glow-card" style="padding:0;overflow:hidden;margin-bottom:1rem;">';
     html += '<div style="height:140px;background:linear-gradient(135deg,var(--bg-tertiary),var(--bg-card));position:relative;">';
     html += '<div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,0.1),rgba(0,0,0,0.7));"></div></div>';
@@ -20314,6 +20314,9 @@ async function _baseInitApp() {
 
       const users = loadData(LS_KEYS.users, {});
 
+      var _pendingFaction = loadData('pending_faction_' + user.id, null);
+      if (_pendingFaction) console.log('[auth] found pending faction:', _pendingFaction);
+
       if (!users[username]) {
 
         users[username] = {
@@ -20322,7 +20325,7 @@ async function _baseInitApp() {
 
           email: user.email,
 
-          faction: 'military',
+          faction: _pendingFaction || 'military',
 
           balance: 200,
 
@@ -20334,7 +20337,7 @@ async function _baseInitApp() {
 
             name: '未设定',
 
-            faction: 'military',
+            faction: _pendingFaction || 'military',
 
             rank: '平民',
 
@@ -20377,13 +20380,14 @@ async function _baseInitApp() {
           .from(SB_TABLES.profiles)
           .select('*')
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
+        console.log('[auth sync] cloud query result:', { hasData: !!cloudProfile, error: cloudError, citizen_id: cloudProfile?.citizen_id, faction: cloudProfile?.faction });
         
         if (!cloudError && cloudProfile) {
           // 云端有数据 → 以云端为准覆盖本地
           if (cloudProfile.citizen_id) { localUser.citizenId = cloudProfile.citizen_id; }
           if (cloudProfile.faction) { localUser.faction = cloudProfile.faction; }
-          if (cloudProfile.avatar) { localUser.avatar = cloudProfile.avatar; }
+          if (cloudProfile.avatar) { localUser.avatar = cloudProfile.avatar; STATE.userProfile = STATE.userProfile || {}; if (!STATE.userProfile.avatar) STATE.userProfile.avatar = cloudProfile.avatar; }
           if (cloudProfile.created_at) { localUser.createdAt = cloudProfile.created_at; }
           if (cloudProfile.balance !== null && cloudProfile.balance !== undefined) {
             var _cloudBal = Number(cloudProfile.balance) || 0;
@@ -20396,6 +20400,13 @@ async function _baseInitApp() {
           }
           users[username] = localUser;
           saveData(LS_KEYS.users, users);
+          // 确保 STATE 同步更新（关键：公民ID跨端一致）
+          if (localUser.citizenId) {
+            var _users2 = loadData(LS_KEYS.users, {});
+            if (_users2[username] && _users2[username].citizenId) {
+              // 已保存，无需重复
+            }
+          }
           
           // 同步到STATE.userProfile的localStorage
           var _localProfile = loadData(LS_KEYS.userProfile + '_' + username, null);
@@ -20406,7 +20417,14 @@ async function _baseInitApp() {
           if (cloudProfile.nickname) _localProfile.name = cloudProfile.nickname;
           if (cloudProfile.bio) _localProfile.bio = cloudProfile.bio;
           if (cloudProfile.rank) _localProfile.rank = cloudProfile.rank;
+          if (cloudProfile.codename) _localProfile.codename = cloudProfile.codename;
+          if (cloudProfile.nickname) _localProfile.name = cloudProfile.nickname;
+          if (cloudProfile.bio) _localProfile.bio = cloudProfile.bio;
+          if (cloudProfile.rank) _localProfile.rank = cloudProfile.rank;
           saveData(LS_KEYS.userProfile + '_' + username, _localProfile);
+          
+          // 同步更新 STATE 对象，确保 enterMainApp 时能读到正确数据
+          STATE.userProfile = _localProfile;
           
         } else {
           // 云端无数据（新表/首次登录）→ 用upsert把本地数据全部推上去
@@ -20424,11 +20442,17 @@ async function _baseInitApp() {
           var _localProfile = loadData(LS_KEYS.userProfile + '_' + username, null);
           if (!_localProfile) _localProfile = {};
           
+          var _pf = loadData('pending_faction_' + userId, null);
+          if (_pf && _pf !== (localUser.faction || 'military')) {
+            localUser.faction = _pf;
+            users[username] = localUser;
+            saveData(LS_KEYS.users, users);
+          }
           var upsertRow = {
             user_id: userId,
             username: username,
             citizen_id: localUser.citizenId,
-            faction: localUser.faction || 'military',
+            faction: localUser.faction || _pendingFaction || 'military',
             avatar: _localProfile.avatar || null,
             codename: _localProfile.codename || null,
             nickname: _localProfile.name || null,
@@ -20444,9 +20468,10 @@ async function _baseInitApp() {
           if (upsertErr) {
             console.warn('[login sync] upsert failed, trying insert:', upsertErr);
             // fallback: 纯插入
-            await supabaseClient.from(SB_TABLES.profiles).insert(upsertRow);
+            const { error: insertErr } = await supabaseClient.from(SB_TABLES.profiles).insert(upsertRow);
+            if (insertErr) console.error('[login sync] insert also failed:', insertErr);
           } else {
-            console.log('[login sync] profile pushed to cloud for user:', username);
+            console.log('[login sync] profile pushed to cloud for user:', username, 'citizen_id:', upsertRow.citizen_id, 'faction:', upsertRow.faction);
           }
         }
       } catch(e) {
@@ -20696,6 +20721,14 @@ async function logout() {
   
 
   STATE.currentUser = null;
+  STATE.userProfile = null;
+  STATE.balance = 0;
+  STATE._cloudSyncReady = false;
+  STATE.userTasks = [];
+  STATE.completedTasks = [];
+  STATE.customXenos = [];
+  if (typeof sbCache !== 'undefined') sbCache.currentUser = null;
+  document.body.style.transform = '';
 
   saveData(LS_KEYS.currentUser, null);
 
@@ -20824,15 +20857,16 @@ async function _baseEnterMainApp() {
 
     // 创建本地兼容用户数据
 
-    const newCitizenId = generateCitizenId ? generateCitizenId() : '';
+    const newCitizenId = ''; // 不在本地生成，由云端同步
 
+    var _pf2 = (typeof loadData === 'function' && userInfo) ? loadData('pending_faction_' + userInfo.id, null) : null;
     user = {
 
       username,
 
       email: userInfo ? userInfo.email : '',
 
-      faction: 'military',
+      faction: _pf2 || 'military',
 
       balance: 200,
 
@@ -20846,7 +20880,7 @@ async function _baseEnterMainApp() {
 
         name: '未设定',
 
-        faction: 'military',
+        faction: _pf2 || 'military',
 
         rank: '平民',
 
@@ -20923,9 +20957,30 @@ async function _baseEnterMainApp() {
         var _tf = document.getElementById('top-faction');
         if (_tf) { _tf.textContent = getFactionName(_fc); _tf.style.borderColor = getFactionColor(_fc); _tf.style.color = getFactionColor(_fc); }
         document.body.className = 'faction-' + _fc;
+        // 刷新公民ID显示
+        var _users3 = loadData(LS_KEYS.users, {});
+        if (_users3[username] && _users3[username].citizenId) {
+          console.log('[enterMainApp] citizen ID from cloud:', _users3[username].citizenId);
+        }
       }
     });
   }
+  
+  // 3秒后再次拉取云端数据，确保跨端公民ID一致
+  setTimeout(function() {
+    if (typeof loadProfileFromSupabase === 'function' && STATE.currentUser) {
+      loadProfileFromSupabase().then(function(cloudData) {
+        if (cloudData) {
+          console.log('[re-sync] 3s cloud re-sync done, citizen_id:', cloudData.citizen_id);
+          if (typeof refreshTopBarAvatar === 'function') refreshTopBarAvatar();
+          var _fc2 = getCurrentFaction();
+          var _tf2 = document.getElementById('top-faction');
+          if (_tf2) { _tf2.textContent = getFactionName(_fc2); _tf2.style.borderColor = getFactionColor(_fc2); _tf2.style.color = getFactionColor(_fc2); }
+          document.body.className = 'faction-' + _fc2;
+        }
+      });
+    }
+  }, 3000);
 
   STATE.userTasks = loadData(LS_KEYS.userTasks + '_' + username, []);
 
@@ -24620,7 +24675,7 @@ function triggerMinorGlitch() {
 
   setTimeout(() => {
 
-    document.body.style.transform = 'translate(0, 0)';
+    document.body.style.transform = '';
 
   }, 100);
 
@@ -28814,9 +28869,9 @@ function saveUserAvatar(dataUrl){if(!STATE.userProfile)STATE.userProfile={};STAT
 
 
 
-function syncProfileToSupabase(){try{if(!STATE._cloudSyncReady){console.warn('[sync] skipped: cloud data not loaded yet');return;}if(typeof supabaseClient==='undefined'||!supabaseClient)return;const uid=getCurrentUserId();if(!uid)return;const p=STATE.userProfile;if(!p)return;var _cid=null;var _bal=STATE.balance||0;if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});if(_users[STATE.currentUser]&&_users[STATE.currentUser].citizenId)_cid=_users[STATE.currentUser].citizenId;}const row={avatar:p.avatar||null,faction:p.faction||null,codename:p.codename||null,nickname:p.name||null,signature:p.bio||null,bio:p.bio||null,rank:p.rank||null,citizen_id:_cid,balance:Math.round(_bal)};row.user_id=uid;if(STATE.currentUser)row.username=STATE.currentUser;supabaseClient.from(SB_TABLES.profiles).upsert(row,{onConflict:'user_id'}).then(function(r){if(r.error){console.warn('profile upsert fail, trying update:',r.error);supabaseClient.from(SB_TABLES.profiles).update(row).eq('user_id',uid).then(function(r2){if(r2.error)console.warn('profile update fail:',r2.error);else console.log('profile synced via update');});}else{console.log('profile synced to cloud');}});}catch(e){console.warn('syncProfileToSupabase error:',e);}}
+function syncProfileToSupabase(){try{if(!STATE._cloudSyncReady){console.warn('[sync] skipped: cloud data not loaded yet');return;}if(typeof supabaseClient==='undefined'||!supabaseClient)return;const uid=getCurrentUserId();if(!uid)return;const p=STATE.userProfile;if(!p)return;var _cid=null;var _bal=STATE.balance||0;if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});if(_users[STATE.currentUser]&&_users[STATE.currentUser].citizenId)_cid=_users[STATE.currentUser].citizenId;}if(!_cid){console.warn('[sync] citizen ID is null, skipping citizen_id field to avoid overwriting cloud');}const row={avatar:p.avatar||null,faction:p.faction||null,codename:p.codename||null,nickname:p.name||null,signature:p.bio||null,bio:p.bio||null,rank:p.rank||null,citizen_id:_cid||undefined,balance:Math.round(_bal)};row.user_id=uid;if(STATE.currentUser)row.username=STATE.currentUser;supabaseClient.from(SB_TABLES.profiles).upsert(row,{onConflict:'user_id'}).then(function(r){if(r.error){console.warn('profile upsert fail, trying update:',r.error);supabaseClient.from(SB_TABLES.profiles).update(row).eq('user_id',uid).then(function(r2){if(r2.error)console.warn('profile update fail:',r2.error);else console.log('profile synced via update');});}else{console.log('profile synced to cloud');}});}catch(e){console.warn('syncProfileToSupabase error:',e);}}
 
-function loadProfileFromSupabase(){try{if(typeof supabaseClient==='undefined'||!supabaseClient)return Promise.resolve(null);const uid=getCurrentUserId();if(!uid)return Promise.resolve(null);return supabaseClient.from(SB_TABLES.profiles).select('*').eq('user_id',uid).single().then(function(r){if(r.data&&!r.error){const d=r.data;var _needSaveUsers=false;if(d.avatar)STATE.userProfile.avatar=d.avatar;if(d.faction)STATE.userProfile.faction=d.faction;if(d.codename)STATE.userProfile.codename=d.codename;if(d.nickname)STATE.userProfile.name=d.nickname;if(d.bio)STATE.userProfile.bio=d.bio;if(d.rank)STATE.userProfile.rank=d.rank;saveData(LS_KEYS.userProfile+'_'+STATE.currentUser,STATE.userProfile);if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});var _u=_users[STATE.currentUser];if(_u){if(d.faction&&d.faction!==_u.faction){_u.faction=d.faction;_needSaveUsers=true;}if(d.citizen_id&&d.citizen_id!==_u.citizenId){_u.citizenId=d.citizen_id;_needSaveUsers=true;}if(d.balance!==null&&d.balance!==undefined){var cloudBal=Number(d.balance)||0;var localBal=STATE.balance||0;if(cloudBal!==localBal){var bestBal=Math.max(cloudBal,localBal);STATE.balance=bestBal;saveData(LS_KEYS.balance+'_'+STATE.currentUser,bestBal);var _tb=document.getElementById('top-balance');if(_tb)_tb.textContent=bestBal.toFixed(1);if(bestBal!==cloudBal&&STATE._cloudSyncReady){if(typeof syncProfileToSupabase==='function')syncProfileToSupabase();}}}if(d.created_at&&d.created_at!==_u.createdAt){_u.createdAt=d.created_at;_needSaveUsers=true;}if(_needSaveUsers){_users[STATE.currentUser]=_u;saveData(LS_KEYS.users,_users);}}}refreshTopBarAvatar();var _fc=d.faction||getCurrentFaction();var _topF=document.getElementById('top-faction');if(_topF){_topF.textContent=getFactionName(_fc);_topF.style.borderColor=getFactionColor(_fc);_topF.style.color=getFactionColor(_fc);}document.body.className='faction-'+_fc;STATE._cloudSyncReady=true;return d;}else{STATE._cloudSyncReady=true;if(typeof syncProfileToSupabase==='function'){setTimeout(function(){syncProfileToSupabase();},500);}return null;}});}catch(e){console.warn('loadProfileFromSupabase error:',e);STATE._cloudSyncReady=true;return Promise.resolve(null);}}
+function loadProfileFromSupabase(){try{if(typeof supabaseClient==='undefined'||!supabaseClient)return Promise.resolve(null);const uid=getCurrentUserId();if(!uid)return Promise.resolve(null);return supabaseClient.from(SB_TABLES.profiles).select('*').eq('user_id',uid).maybeSingle().then(function(r){if(r.data&&!r.error){const d=r.data;var _needSaveUsers=false;if(d.avatar)STATE.userProfile.avatar=d.avatar;if(d.faction)STATE.userProfile.faction=d.faction;if(d.codename)STATE.userProfile.codename=d.codename;if(d.nickname)STATE.userProfile.name=d.nickname;if(d.bio)STATE.userProfile.bio=d.bio;if(d.rank)STATE.userProfile.rank=d.rank;saveData(LS_KEYS.userProfile+'_'+STATE.currentUser,STATE.userProfile);if(STATE.currentUser){var _users=loadData(LS_KEYS.users,{});var _u=_users[STATE.currentUser];if(_u){if(d.faction&&d.faction!==_u.faction){_u.faction=d.faction;_needSaveUsers=true;}if(d.citizen_id&&d.citizen_id!==_u.citizenId){_u.citizenId=d.citizen_id;_needSaveUsers=true;}if(d.avatar&&d.avatar!==_u.avatar){_u.avatar=d.avatar;_needSaveUsers=true;}if(d.balance!==null&&d.balance!==undefined){var cloudBal=Number(d.balance)||0;var localBal=STATE.balance||0;if(cloudBal!==localBal){var bestBal=Math.max(cloudBal,localBal);STATE.balance=bestBal;saveData(LS_KEYS.balance+'_'+STATE.currentUser,bestBal);var _tb=document.getElementById('top-balance');if(_tb)_tb.textContent=bestBal.toFixed(1);if(bestBal!==cloudBal&&STATE._cloudSyncReady){if(typeof syncProfileToSupabase==='function')syncProfileToSupabase();}}}if(d.created_at&&d.created_at!==_u.createdAt){_u.createdAt=d.created_at;_needSaveUsers=true;}if(_needSaveUsers){_users[STATE.currentUser]=_u;saveData(LS_KEYS.users,_users);var _cidEl=document.getElementById('profile-citizen-id');if(_cidEl&&_u.citizenId)_cidEl.textContent=_u.citizenId;}}}refreshTopBarAvatar();var _fc=d.faction||getCurrentFaction();var _topF=document.getElementById('top-faction');if(_topF){_topF.textContent=getFactionName(_fc);_topF.style.borderColor=getFactionColor(_fc);_topF.style.color=getFactionColor(_fc);}document.body.className='faction-'+_fc;STATE._cloudSyncReady=true;return d;}else{STATE._cloudSyncReady=true;if(typeof syncProfileToSupabase==='function'){setTimeout(function(){syncProfileToSupabase();},500);}return null;}});}catch(e){console.warn('loadProfileFromSupabase error:',e);STATE._cloudSyncReady=true;return Promise.resolve(null);}}
 
 function handleAvatarUpload(e){const f=e.target.files[0];if(!f)return;if(!f.type.startsWith('image/')){showToast('请选择图片','error');return;}if(f.size>5*1024*1024){showToast('图片不能超过5MB','error');return;}showToast('正在处理头像...','info');compressImage(f,200,0.8,function(d){saveUserAvatar(d);showToast('头像上传成功','success');if(STATE.currentNav==='profile')renderProfilePage();refreshTopBarAvatar();});}
 
@@ -39016,6 +39071,7 @@ doLogout = function() {
     if (error) {
       showToast('退出失败：' + error.message, 'error');
     } else {
+      document.body.style.transform = '';
       showToast('已退出登录', 'info');
       setTimeout(() => location.reload(), 500);
     }
