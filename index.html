@@ -8,7 +8,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>星网系统 · 穹顶网络接入终端 v4.7.18 [Supabase云同步版]</title>
+<title>星网系统 · 穹顶网络接入终端 v4.7.19 [Supabase云同步版]</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -27189,7 +27189,8 @@ openDmChat = function(targetId, targetName, targetFaction, isNpc) {
       lastTime: '',
       targetName: targetName || '',
       targetFaction: targetFaction || '',
-      isNpc: isNpc || !!NPC_ACCOUNTS[targetId]
+      isNpc: isNpc || !!NPC_ACCOUNTS[targetId],
+      isUser: !(isNpc || !!NPC_ACCOUNTS[targetId])
     };
   }
 
