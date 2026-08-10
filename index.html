@@ -8,7 +8,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>星网系统 · 穹顶网络接入终端 v4.7.15 [Supabase云同步版]</title>
+<title>星网系统 · 穹顶网络接入终端 v4.7.16 [Supabase云同步版]</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -17933,7 +17933,7 @@ toggleFriend = function(id) {
 
     <div class="login-title glitch" data-text="星网接入终端">星网接入终端</div>
 
-    <div class="login-subtitle">STAR-NET ACCESS TERMINAL v4.7.15</div>
+    <div class="login-subtitle">STAR-NET ACCESS TERMINAL v4.7.16</div>
 
     
 
@@ -23497,9 +23497,9 @@ function renderMyTasks() {
 
         <div style="margin-top:0.8rem;text-align:right;display:flex;gap:0.5rem;justify-content:flex-end;">
 
-          <button class="btn btn-sm" onclick="submitQuest('${quest.id}')">提 交 完 成</button>
+          <button class="btn btn-sm" onclick="submitQuest(quest.id || quest.questId)">提 交 完 成</button>
 
-          <button class="btn btn-sm btn-red" onclick="abandonQuest('${quest.id}')">放 弃</button>
+          <button class="btn btn-sm btn-red" onclick="abandonQuest(quest.id || quest.questId)">放 弃</button>
 
         </div>
 
@@ -23649,7 +23649,7 @@ function abandonQuest(questId) {
 
   
 
-  STATE.userTasks = STATE.userTasks.filter(t => t.id !== questId);
+  STATE.userTasks = STATE.userTasks.filter(t => (t.id || t.questId) !== questId);
 
   saveData(LS_KEYS.userTasks + '_' + STATE.currentUser, STATE.userTasks);
 
@@ -33226,7 +33226,7 @@ function showQuestDetail(questId) {
 
             🎯 接取任务
 
-          <button onclick="submitQuest('${quest.id}')" style="padding:0.7rem 2rem;background:linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,165,0,0.1));border:1px solid var(--gold);border-radius:4px;color:var(--gold);cursor:pointer;font-family:var(--font-mono);letter-spacing:2px;margin-left:1rem;">
+          <button onclick="submitQuest(quest.id || quest.questId)" style="padding:0.7rem 2rem;background:linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,165,0,0.1));border:1px solid var(--gold);border-radius:4px;color:var(--gold);cursor:pointer;font-family:var(--font-mono);letter-spacing:2px;margin-left:1rem;">
 
             📝 提交任务
 
@@ -33264,9 +33264,11 @@ function applyForQuest(questId) {
 
   
 
-  const userTasks = loadData(LS_KEYS.userTasks, []);
+  const tasksKey = LS_KEYS.userTasks + '_' + STATE.currentUser;
 
-  if (userTasks.find(t => t.questId === questId)) {
+  const userTasks = loadData(tasksKey, []);
+
+  if (userTasks.find(t => t.questId === questId || t.id === questId)) {
 
     showToast('你已经接过这个任务了', 'info');
 
@@ -33276,17 +33278,33 @@ function applyForQuest(questId) {
 
   
 
+  const q = (window.QUESTS_DATA || []).find(x => x.id === questId) || {};
+
   userTasks.push({
+
+    id: questId,
 
     questId: questId,
 
+    title: q.title || questId,
+
+    desc: q.description || q.desc || '',
+
+    difficulty: q.level || q.rank || 'E',
+
+    reward: q.reward || 0,
+
     status: 'accepted',
+
+    acceptedAt: (typeof getTimeStr === 'function') ? getTimeStr() : new Date().toISOString(),
 
     acceptTime: new Date().toISOString()
 
   });
 
-  saveData(LS_KEYS.userTasks, userTasks);
+  saveData(tasksKey, userTasks);
+
+  STATE.userTasks = userTasks;
 
   
 
@@ -37125,7 +37143,7 @@ renderBountyList = function(quests) {
 
     if (accepted) {
 
-      h += '<button class="btn" disabled style="opacity:0.6;">已接取</button>';
+      h += '<div style="display:flex;flex-direction:column;gap:6px;"><button class="btn" disabled style="opacity:0.6;">已接取</button><button class="btn btn-gold" onclick="gotoMyTasks()">去提交</button></div>';
 
     } else if (canAccept) {
 
@@ -37167,6 +37185,10 @@ acceptQuest = function(questId) {
 
     title: quest.title,
 
+    desc: quest.desc,
+
+    difficulty: quest.rank,
+
     rank: quest.rank,
 
     type: quest.type,
@@ -37175,13 +37197,13 @@ acceptQuest = function(questId) {
 
     issuer: quest.issuer,
 
-    acceptedAt: Date.now(),
+    acceptedAt: (typeof getTimeStr === 'function') ? getTimeStr() : new Date().toISOString(),
 
     status: 'ongoing'
 
   });
 
-  saveData(LS_KEYS.userTasks, STATE.userTasks);
+  saveData(LS_KEYS.userTasks + '_' + STATE.currentUser, STATE.userTasks);
 
   showToast('任务已接取：' + quest.title, 'success');
 
@@ -45321,8 +45343,20 @@ setInterval(function() {
 
 }, 2000);
 
-</script>
 
+// ==================== v4.7.16 悬赏大厅「去提交」直达 ====================
+gotoMyTasks = function() {
+  if (typeof navigateTo === 'function') {
+    navigateTo('hunter');
+  } else if (typeof renderHunterPage === 'function') {
+    renderHunterPage();
+  }
+  setTimeout(function() {
+    if (typeof switchHunterTab === 'function') switchHunterTab('my');
+  }, 120);
+};
+
+</script>
 
 
 <!-- 底部状态栏 -->
