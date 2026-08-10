@@ -8,7 +8,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>星网系统 · 穹顶网络接入终端 v4.7.16 [Supabase云同步版]</title>
+<title>星网系统 · 穹顶网络接入终端 v4.7.17 [Supabase云同步版]</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -17933,7 +17933,7 @@ toggleFriend = function(id) {
 
     <div class="login-title glitch" data-text="星网接入终端">星网接入终端</div>
 
-    <div class="login-subtitle">STAR-NET ACCESS TERMINAL v4.7.16</div>
+    <div class="login-subtitle">STAR-NET ACCESS TERMINAL v4.7.17</div>
 
     
 
@@ -23291,6 +23291,8 @@ function switchHunterTab(tabId) {
 
   const container = $('#hunter-tab-content');
 
+  if (!container) return;
+
   switch(tabId) {
 
     case 'bounty': container.innerHTML = renderBountyBoard(); break;
@@ -27317,6 +27319,26 @@ sendDmMessage = function() {
 
     saveData(getUserDmInboxKey(targetId), inbox);
 
+    // v4.7.17：同步到 Supabase 云端，对方设备可拉取
+
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && typeof SB_TABLES !== 'undefined' && SB_TABLES.dmMessages) {
+
+      supabaseClient.from(SB_TABLES.dmMessages).insert({
+
+        sender_username: STATE.currentUser,
+
+        receiver_username: targetId,
+
+        content: text
+
+      }).then(function(r) {
+
+        if (r && r.error) console.warn('[dm cloud] send fail:', r.error);
+
+      });
+
+    }
+
   }
 
 };
@@ -29962,7 +29984,9 @@ const SB_TABLES = {
 
   friendRequests: 'friend_requests',
 
-  friendships: 'friendships'
+  friendships: 'friendships',
+
+  dmMessages: 'dm_messages'
 
 };
 
@@ -39804,6 +39828,61 @@ openImageViewer = function(src) {
 pollUserDmInbox = function() {
   if (!STATE.currentUser) return;
   
+  // v4.7.17：从 Supabase 云端拉取发给我的私信
+  if (typeof supabaseClient !== 'undefined' && supabaseClient && typeof SB_TABLES !== 'undefined' && SB_TABLES.dmMessages) {
+    if (!STATE._dmCloudSeen) STATE._dmCloudSeen = {};
+    supabaseClient.from(SB_TABLES.dmMessages)
+      .select('*')
+      .eq('receiver_username', STATE.currentUser)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(function(r) {
+        if (!r || r.error || !r.data) return;
+        let hasNew = false;
+        r.data.forEach(function(m) {
+          if (STATE._dmCloudSeen[m.id]) return;
+          STATE._dmCloudSeen[m.id] = 1;
+          const fromUser = m.sender_username;
+          if (!fromUser || fromUser === STATE.currentUser) return;
+          if (!STATE.privateChats) STATE.privateChats = {};
+          if (!STATE.privateChats[fromUser]) {
+            STATE.privateChats[fromUser] = {
+              targetName: fromUser, messages: [], unread: 0,
+              lastMsg: '', lastTime: '', lastTimeTs: 0,
+              isNpc: false, isUser: true, _lastMsgTs: 0
+            };
+          }
+          const chat = STATE.privateChats[fromUser];
+          if (chat.messages.some(function(x) { return x._cloudId === m.id; })) return;
+          const ts = m.created_at ? new Date(m.created_at).getTime() : Date.now();
+          const d = new Date(ts);
+          const timeStr = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+          chat.messages.push({ from: fromUser, content: m.content, time: timeStr, status: '未读', _ts: ts, _cloudId: m.id });
+          chat.lastMsg = m.content;
+          chat.lastTime = timeStr;
+          chat.lastTimeTs = ts;
+          hasNew = true;
+          if (STATE.currentDmTarget !== fromUser || STATE.currentNav !== 'dm') {
+            chat.unread = (chat.unread || 0) + 1;
+            if (typeof addNotification === 'function') {
+              addNotification({
+                type: 'dm',
+                title: fromUser + ' 发来私信',
+                content: (m.content || '').substring(0, 30),
+                targetId: fromUser,
+                time: '刚刚',
+                read: false
+              });
+            }
+          }
+        });
+        if (hasNew) {
+          if (typeof savePrivateChats === 'function') savePrivateChats();
+          if (STATE.currentNav === 'dm' && typeof renderDmPage === 'function') renderDmPage();
+        }
+      });
+  }
+  
   const inboxKey = getUserDmInboxKey(STATE.currentUser);
   const inbox = loadData(inboxKey, []);
   if (!inbox || !inbox.length) return;
@@ -40130,6 +40209,17 @@ sendUserToUserDm = function(targetUser, text) {
   // 最多保留200条
   inbox = inbox.slice(-200);
   saveData(getUserDmInboxKey(targetUser), inbox);
+  
+  // v4.7.17：同步到 Supabase 云端，对方设备可拉取
+  if (typeof supabaseClient !== 'undefined' && supabaseClient && typeof SB_TABLES !== 'undefined' && SB_TABLES.dmMessages) {
+    supabaseClient.from(SB_TABLES.dmMessages).insert({
+      sender_username: STATE.currentUser,
+      receiver_username: targetUser,
+      content: text
+    }).then(function(r) {
+      if (r && r.error) console.warn('[dm cloud] send fail:', r.error);
+    });
+  }
   
   // 同步到自己的聊天记录
   if (!STATE.privateChats) STATE.privateChats = {};
@@ -45344,7 +45434,9 @@ setInterval(function() {
 }, 2000);
 
 
-// ==================== v4.7.16 悬赏大厅「去提交」直达 ====================
+// ==================== v4.7.17 悬赏大厅「去提交」直达 ====================
+// 注意：进入猎人页约50ms后增强任务板会整页覆写 #page-content（销毁页签容器），
+// 因此这里等待覆写完成后，直接将「我的任务」整页渲染，不依赖页签容器。
 gotoMyTasks = function() {
   if (typeof navigateTo === 'function') {
     navigateTo('hunter');
@@ -45352,8 +45444,13 @@ gotoMyTasks = function() {
     renderHunterPage();
   }
   setTimeout(function() {
-    if (typeof switchHunterTab === 'function') switchHunterTab('my');
-  }, 120);
+    const content = document.getElementById('page-content');
+    if (!content) return;
+    let html = '<div class="page-header"><div class="page-title">我 的 任 务</div></div>';
+    html += '<div style="margin-bottom:var(--space-md);"><button class="btn" onclick="navigateTo(\'hunter\')">← 返回猎人公会</button></div>';
+    html += (typeof renderMyTasks === 'function') ? renderMyTasks() : '';
+    content.innerHTML = html;
+  }, 350);
 };
 
 </script>
