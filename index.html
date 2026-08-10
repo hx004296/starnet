@@ -8,7 +8,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>星网系统 · 穹顶网络接入终端 v4.7.12 [Supabase云同步版]</title>
+<title>星网系统 · 穹顶网络接入终端 v4.7.15 [Supabase云同步版]</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -17251,7 +17251,7 @@ toggleFriend = function(id) {
 
     STATE.friends.push({ id: id, name: role.name, faction: role.faction, time: '刚刚' });
 
-    showToast('好友申请已发送', 'success');
+    showToast('已添加角色好友', 'success');
 
   }
 
@@ -17933,7 +17933,7 @@ toggleFriend = function(id) {
 
     <div class="login-title glitch" data-text="星网接入终端">星网接入终端</div>
 
-    <div class="login-subtitle">STAR-NET ACCESS TERMINAL v4.7.12</div>
+    <div class="login-subtitle">STAR-NET ACCESS TERMINAL v4.7.15</div>
 
     
 
@@ -20169,7 +20169,7 @@ saveFriends = function(friends) {
 
 // 执行公民检索
 
-doCitizenSearch = function() {
+doCitizenSearch = async function() {
 
   const input = document.getElementById('citizen-search-input');
 
@@ -20193,7 +20193,9 @@ doCitizenSearch = function() {
 
   
 
-  const result = searchByCitizenId(cid);
+  resultEl.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--text-dim);">&#x1F50D; 正在检索帝国公民档案库...</div>';
+  
+  const result = await searchByCitizenId(cid);
 
   
 
@@ -20212,6 +20214,20 @@ doCitizenSearch = function() {
   const alreadyFriend = isFriend(result.id);
 
   const isSelf = result.type === 'user' && STATE.currentUser && result.id === STATE.currentUser;
+
+  // v4.7.14: 检查是否已向对方发送过待处理申请
+
+  if (result.type === 'user' && !isSelf && !alreadyFriend && typeof loadSentFriendRequests === 'function') {
+
+    try {
+
+      const _sentReqs = await loadSentFriendRequests();
+
+      result._pendingSent = _sentReqs.some(function(r) { return r.status === 'pending' && r.to_username === result.id; });
+
+    } catch(_e3) {}
+
+  }
 
   
 
@@ -20259,6 +20275,22 @@ doCitizenSearch = function() {
 
     html += '<button class="btn btn-sm" style="color:var(--red);border-color:var(--red);" onclick="removeFriendAndRefresh(\'' + result.id + '\')">移除好友</button>';
 
+  } else if (result.type === 'user') {
+
+    // v4.7.14: 真实用户走双向好友申请制
+
+    if (result._pendingSent) {
+
+      html += '<button class="btn btn-sm" disabled style="opacity:0.6;">✉ 申请已发送，等待通过</button>';
+
+    } else {
+
+      html += '<button class="btn btn-sm btn-gold" onclick="sendFriendRequestFromSearch(\'' + result.id + '\',\'' + (result.cloudUserId || '') + '\',\'' + result.name.replace(/'/g, '\\\'') + '\',\'' + result.faction + '\',\'' + result.avatar + '\',\'' + result.citizenId + '\')">✉ 发送好友申请</button>';
+
+    }
+
+    html += '<button class="btn btn-sm" onclick="openDmChat(\'' + result.id + '\',\'' + result.name.replace(/'/g, '\\\'') + '\',\'' + result.faction + '\',false)">💬 发私信</button>';
+
   } else {
 
     html += '<button class="btn btn-sm btn-gold" onclick="addFriendFromSearch(\'' + result.id + '\',\'' + result.type + '\',\'' + result.name.replace(/'/g, '\\\'') + '\',\'' + result.faction + '\',\'' + result.avatar + '\',\'' + result.citizenId + '\')">+ 添加好友</button>';
@@ -20303,6 +20335,8 @@ removeFriendAndRefresh = function(id) {
 
   removeFriend(id);
 
+  if (typeof removeFriendshipFromCloud === 'function') { try { removeFriendshipFromCloud(id); } catch(_e2) {} }
+
   showToast('已移除好友', 'info');
 
   if (STATE.currentNav === 'citizenSearch') {
@@ -20321,13 +20355,15 @@ removeFriendAndRefresh = function(id) {
 
 // 渲染好友列表页面
 
-renderFriendsPage = function() {
+renderFriendsPage = async function() {
 
   const content = $('#page-content');
 
   if (!content) return;
 
   
+
+  if (typeof syncFriendshipsFromCloud === 'function') { try { await syncFriendshipsFromCloud(); } catch(_e0) { console.warn(_e0); } }
 
   const friends = loadFriends();
 
@@ -20338,6 +20374,8 @@ renderFriendsPage = function() {
   html += '<div style="font-size:0.75rem;color:var(--text-dim);font-family:var(--font-mono);">共 ' + friends.length + ' 位好友</div>';
 
   html += '</div>';
+
+  html += '<div id="friend-requests-block" style="margin-bottom:1rem;"></div>';
 
   
 
@@ -20404,6 +20442,8 @@ renderFriendsPage = function() {
   content.innerHTML = html;
 
   initPageEffects();
+
+  try { await renderFriendRequestsBlock(); } catch(_e1) { console.warn(_e1); }
 
 };
 
@@ -20671,6 +20711,18 @@ async function _baseInitApp() {
         if (!cloudError && cloudProfile) {
           // 云端有数据 → 以云端为准覆盖本地
           if (cloudProfile.citizen_id) { localUser.citizenId = cloudProfile.citizen_id; }
+          else {
+            // v4.7.14: 云端有档案行但公民ID为空 → 立即生成并回写，修复"待生成"死锁
+            const _cidCharsA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let _ncidA = 'IMP-';
+            for (let _ciA = 0; _ciA < 8; _ciA++) { _ncidA += _cidCharsA.charAt(Math.floor(Math.random() * _cidCharsA.length)); }
+            localUser.citizenId = _ncidA;
+            console.log('[auth sync] cloud row missing citizen_id, generated:', _ncidA);
+            try {
+              const { error: _cidErrA } = await supabaseClient.from(SB_TABLES.profiles).update({ citizen_id: _ncidA }).eq('user_id', userId);
+              if (_cidErrA) console.warn('[auth sync] citizen_id update failed:', _cidErrA);
+            } catch(_eA) { console.warn('[auth sync] citizen_id update error:', _eA); }
+          }
           if (cloudProfile.faction) { localUser.faction = cloudProfile.faction; }
           if (cloudProfile.avatar) { localUser.avatar = cloudProfile.avatar; STATE.userProfile = STATE.userProfile || {}; if (!STATE.userProfile.avatar) STATE.userProfile.avatar = cloudProfile.avatar; }
           if (cloudProfile.created_at) { localUser.createdAt = cloudProfile.created_at; }
@@ -21213,9 +21265,49 @@ async function _baseEnterMainApp() {
 
   } else if (!user.citizenId) {
 
-    // v4.7.12: 不在本地生成citizenId，等云端同步填充，确保跨端一致
+    // v4.7.14: 立即本地生成公民ID并异步回写云端（修复"待生成"死锁，不再空等云端）
 
-    console.log('[enterMainApp] citizenId empty, will be filled by cloud sync');
+    const _cidCharsB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+    let _newCidB = 'IMP-';
+
+    for (let _ciB = 0; _ciB < 8; _ciB++) { _newCidB += _cidCharsB.charAt(Math.floor(Math.random() * _cidCharsB.length)); }
+
+    user.citizenId = _newCidB;
+
+    users[username] = user;
+
+    saveData(LS_KEYS.users, users);
+
+    console.log('[enterMainApp] citizenId generated locally:', _newCidB);
+
+    (async function() {
+
+      try {
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && userInfo && userInfo.id) {
+
+          const { error: _upErrB } = await supabaseClient.from(SB_TABLES.profiles).upsert({
+
+            user_id: userInfo.id,
+
+            username: username,
+
+            citizen_id: _newCidB,
+
+            faction: user.faction || 'military'
+
+          }, { onConflict: 'user_id' });
+
+          if (_upErrB) console.warn('[enterMainApp] citizenId cloud upsert failed:', _upErrB);
+
+          else console.log('[enterMainApp] citizenId synced to cloud:', _newCidB);
+
+        }
+
+      } catch(_eB) { console.warn('[enterMainApp] citizenId cloud sync error:', _eB); }
+
+    })();
 
   }
 
@@ -29866,7 +29958,11 @@ const SB_TABLES = {
 
   settings: 'user_settings',
 
-  userTasks: 'user_tasks'
+  userTasks: 'user_tasks',
+
+  friendRequests: 'friend_requests',
+
+  friendships: 'friendships'
 
 };
 
@@ -38803,7 +38899,7 @@ scheduleNpcDmReply = function(targetId) {
 
 // ===== searchByCitizenId =====
 
-searchByCitizenId = function(citizenId) {
+searchByCitizenId = async function(citizenId) {
 
   if (!citizenId) return null;
 
@@ -38917,6 +39013,35 @@ searchByCitizenId = function(citizenId) {
 
   
 
+  
+  // ===== v4.7.14: 追加 Supabase 云端档案检索（跨设备可查所有注册用户）=====
+  try {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      const { data: cloudUser, error: cloudErr } = await supabaseClient
+        .from(SB_TABLES.profiles)
+        .select('*')
+        .eq('citizen_id', upperId)
+        .maybeSingle();
+      if (cloudErr) {
+        console.warn('[citizen search] cloud query error:', cloudErr);
+      } else if (cloudUser) {
+        return {
+          type: 'user',
+          id: cloudUser.username,
+          name: cloudUser.codename || cloudUser.nickname || cloudUser.username,
+          faction: cloudUser.faction || 'military',
+          avatar: cloudUser.avatar || (cloudUser.username || 'A').charAt(0).toUpperCase(),
+          citizenId: cloudUser.citizen_id,
+          cloudUserId: cloudUser.user_id,
+          signature: cloudUser.rank || '帝国公民',
+          bio: cloudUser.bio || '这个人很神秘...'
+        };
+      }
+    }
+  } catch(e) {
+    console.warn('[citizen search] cloud query failed:', e);
+  }
+  
   return null;
 
 };
@@ -44589,6 +44714,612 @@ var renderDossierMineHeader = function() {
 
 
 // ============== 新增功能注入结束 ==============
+
+
+
+// ===== v4.7.14: loadProfileFromSupabase 补齐实现（此前4处调用点空转，函数从未定义）=====
+
+loadProfileFromSupabase = async function() {
+
+  try {
+
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return null;
+
+    const { data: _ud } = await supabaseClient.auth.getUser();
+
+    const _u = _ud && _ud.user;
+
+    if (!_u) return null;
+
+    const _username = (_u.user_metadata && _u.user_metadata.username) || (_u.email ? _u.email.split('@')[0] : STATE.currentUser);
+
+    if (!_username) return null;
+
+    const { data: _row, error: _qErr } = await supabaseClient
+
+      .from(SB_TABLES.profiles)
+
+      .select('*')
+
+      .eq('user_id', _u.id)
+
+      .maybeSingle();
+
+    if (_qErr) { console.warn('[loadProfileFromSupabase] query error:', _qErr); return null; }
+
+    const _users = loadData(LS_KEYS.users, {});
+
+    if (!_users[_username]) return _row || null;
+
+    const _lu = _users[_username];
+
+    if (_row) {
+
+      if (_row.citizen_id && !_lu.citizenId) {
+
+        _lu.citizenId = _row.citizen_id;
+
+        _users[_username] = _lu;
+
+        saveData(LS_KEYS.users, _users);
+
+      } else if (!_row.citizen_id) {
+
+        if (!_lu.citizenId) {
+
+          const _ch = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+          let _nc = 'IMP-';
+
+          for (let _i = 0; _i < 8; _i++) { _nc += _ch.charAt(Math.floor(Math.random() * _ch.length)); }
+
+          _lu.citizenId = _nc;
+
+          _users[_username] = _lu;
+
+          saveData(LS_KEYS.users, _users);
+
+        }
+
+        try { await supabaseClient.from(SB_TABLES.profiles).update({ citizen_id: _lu.citizenId }).eq('user_id', _u.id); } catch(_e1) {}
+
+        _row.citizen_id = _lu.citizenId;
+
+      }
+
+      return _row;
+
+    } else {
+
+      if (!_lu.citizenId) {
+
+        const _ch2 = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+        let _nc2 = 'IMP-';
+
+        for (let _i2 = 0; _i2 < 8; _i2++) { _nc2 += _ch2.charAt(Math.floor(Math.random() * _ch2.length)); }
+
+        _lu.citizenId = _nc2;
+
+        _users[_username] = _lu;
+
+        saveData(LS_KEYS.users, _users);
+
+      }
+
+      try {
+
+        await supabaseClient.from(SB_TABLES.profiles).upsert({
+
+          user_id: _u.id,
+
+          username: _username,
+
+          citizen_id: _lu.citizenId,
+
+          faction: _lu.faction || 'military'
+
+        }, { onConflict: 'user_id' });
+
+      } catch(_e3) {}
+
+      return null;
+
+    }
+
+  } catch(_e4) {
+
+    console.warn('[loadProfileFromSupabase] error:', _e4);
+
+    return null;
+
+  }
+
+};
+
+
+
+// ==================== v4.7.14: 好友申请系统（真实用户双向制） ====================
+
+getMyAuthInfo = async function() {
+
+  try {
+
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return null;
+
+    const { data: _ud } = await supabaseClient.auth.getUser();
+
+    const _u = _ud && _ud.user;
+
+    if (!_u) return null;
+
+    const _username = (_u.user_metadata && _u.user_metadata.username) || (_u.email ? _u.email.split('@')[0] : '');
+
+    const _users = loadData(LS_KEYS.users, {});
+
+    const _lu = _users[_username] || {};
+
+    return { userId: _u.id, username: _username, citizenId: _lu.citizenId || '', faction: _lu.faction || 'military' };
+
+  } catch(_e) { return null; }
+
+};
+
+sendFriendRequestFromSearch = async function(toUsername, toUserId, name, faction, avatar, citizenId) {
+
+  showLoading('正在发送好友申请...');
+
+  try {
+
+    const res = await sendFriendRequest({ toUsername: toUsername, toUserId: toUserId, name: name, faction: faction, citizenId: citizenId });
+
+    showToast(res.msg, res.success ? 'success' : 'error');
+
+    if (res.success && STATE.currentNav === 'citizenSearch') doCitizenSearch();
+
+  } catch(e) {
+
+    showToast('发送失败：' + (e.message || e), 'error');
+
+  }
+
+  hideLoading();
+
+};
+
+sendFriendRequest = async function(target) {
+
+  const me = await getMyAuthInfo();
+
+  if (!me) return { success: false, msg: '登录状态异常，请重新登录' };
+
+  if (!target.toUserId) return { success: false, msg: '对方档案尚未同步，暂无法申请' };
+
+  if (target.toUserId === me.userId) return { success: false, msg: '不能添加自己为好友' };
+
+  const friends = loadFriends();
+
+  if (friends.some(function(f) { return f.id === target.toUsername; })) return { success: false, msg: '已经是好友了' };
+
+  const { data: _dup, error: _dupErr } = await supabaseClient
+
+    .from(SB_TABLES.friendRequests)
+
+    .select('id')
+
+    .eq('from_user_id', me.userId)
+
+    .eq('to_user_id', target.toUserId)
+
+    .eq('status', 'pending');
+
+  if (!_dupErr && _dup && _dup.length > 0) return { success: false, msg: '申请已发送过，等待对方通过' };
+
+  const { data: _rev } = await supabaseClient
+
+    .from(SB_TABLES.friendRequests)
+
+    .select('id')
+
+    .eq('from_user_id', target.toUserId)
+
+    .eq('to_user_id', me.userId)
+
+    .eq('status', 'pending');
+
+  if (_rev && _rev.length > 0) return { success: false, msg: '对方已向你发送申请，请到「我的好友」页面通过' };
+
+  const { error: _insErr } = await supabaseClient.from(SB_TABLES.friendRequests).insert({
+
+    from_user_id: me.userId,
+
+    from_username: me.username,
+
+    from_citizen_id: me.citizenId,
+
+    from_faction: me.faction,
+
+    to_user_id: target.toUserId,
+
+    to_username: target.toUsername
+
+  });
+
+  if (_insErr) {
+
+    console.warn('[friend request] insert error:', _insErr);
+
+    return { success: false, msg: '发送失败：' + (_insErr.message || '网络异常') };
+
+  }
+
+  return { success: true, msg: '好友申请已发送，等待对方通过' };
+
+};
+
+loadReceivedFriendRequests = async function() {
+
+  try {
+
+    const me = await getMyAuthInfo();
+
+    if (!me) return [];
+
+    const { data, error } = await supabaseClient
+
+      .from(SB_TABLES.friendRequests)
+
+      .select('*')
+
+      .eq('to_user_id', me.userId)
+
+      .eq('status', 'pending')
+
+      .order('created_at', { ascending: false });
+
+    if (error) { console.warn('[friend requests] load received error:', error); return []; }
+
+    return data || [];
+
+  } catch(e) { return []; }
+
+};
+
+loadSentFriendRequests = async function() {
+
+  try {
+
+    const me = await getMyAuthInfo();
+
+    if (!me) return [];
+
+    const { data, error } = await supabaseClient
+
+      .from(SB_TABLES.friendRequests)
+
+      .select('*')
+
+      .eq('from_user_id', me.userId)
+
+      .order('created_at', { ascending: false })
+
+      .limit(20);
+
+    if (error) { console.warn('[friend requests] load sent error:', error); return []; }
+
+    return data || [];
+
+  } catch(e) { return []; }
+
+};
+
+acceptFriendRequest = async function(reqId) {
+
+  showLoading('正在通过申请...');
+
+  try {
+
+    const me = await getMyAuthInfo();
+
+    if (!me) { hideLoading(); showToast('登录状态异常', 'error'); return; }
+
+    const { data: _req, error: _rErr } = await supabaseClient
+
+      .from(SB_TABLES.friendRequests).select('*').eq('id', reqId).maybeSingle();
+
+    if (_rErr || !_req) { hideLoading(); showToast('申请记录不存在', 'error'); return; }
+
+    if (_req.status !== 'pending') { hideLoading(); showToast('该申请已处理过', 'info'); renderFriendsPage(); return; }
+
+    const { error: _uErr } = await supabaseClient.from(SB_TABLES.friendRequests)
+
+      .update({ status: 'accepted', handled_at: new Date().toISOString() })
+
+      .eq('id', reqId);
+
+    if (_uErr) { hideLoading(); showToast('操作失败：' + _uErr.message, 'error'); return; }
+
+    await supabaseClient.from(SB_TABLES.friendships).upsert({
+
+      user_id: me.userId,
+
+      friend_user_id: _req.from_user_id,
+
+      friend_username: _req.from_username,
+
+      friend_citizen_id: _req.from_citizen_id || '',
+
+      friend_faction: _req.from_faction || 'military'
+
+    }, { onConflict: 'user_id,friend_username' });
+
+    addFriend({
+
+      id: _req.from_username,
+
+      type: 'user',
+
+      name: _req.from_username,
+
+      faction: _req.from_faction || 'military',
+
+      avatar: (_req.from_username || 'A').charAt(0).toUpperCase(),
+
+      citizenId: _req.from_citizen_id || ''
+
+    });
+
+    hideLoading();
+
+    showToast('已通过好友申请', 'success');
+
+    renderFriendsPage();
+
+  } catch(e) {
+
+    hideLoading();
+
+    showToast('操作出错：' + (e.message || e), 'error');
+
+  }
+
+};
+
+rejectFriendRequest = async function(reqId) {
+
+  try {
+
+    const { error } = await supabaseClient.from(SB_TABLES.friendRequests)
+
+      .update({ status: 'rejected', handled_at: new Date().toISOString() })
+
+      .eq('id', reqId);
+
+    if (error) { showToast('操作失败：' + error.message, 'error'); return; }
+
+    showToast('已拒绝该申请', 'info');
+
+    renderFriendsPage();
+
+  } catch(e) { showToast('操作出错', 'error'); }
+
+};
+
+renderFriendRequestsBlock = async function() {
+
+  const el = document.getElementById('friend-requests-block');
+
+  if (!el) return;
+
+  const received = await loadReceivedFriendRequests();
+
+  const sent = await loadSentFriendRequests();
+
+  let html = '';
+
+  if (received.length > 0) {
+
+    html += '<div class="card glow-card" style="padding:1rem;margin-bottom:0.8rem;border-color:var(--gold);">';
+
+    html += '<div style="font-size:0.85rem;color:var(--gold);font-family:var(--font-mono);margin-bottom:0.6rem;">📩 收到的好友申请（' + received.length + '）</div>';
+
+    received.forEach(function(r) {
+
+      const fc = getFactionColor(r.from_faction || 'military');
+
+      html += '<div style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0;border-top:1px solid var(--border-color);">';
+
+      html += '<div style="width:36px;height:36px;border-radius:50%;background:var(--bg-tertiary);border:2px solid ' + fc + ';display:flex;align-items:center;justify-content:center;font-weight:bold;color:' + fc + ';flex-shrink:0;">' + (r.from_username || '?').charAt(0).toUpperCase() + '</div>';
+
+      html += '<div style="flex:1;min-width:0;">';
+
+      html += '<div style="font-size:0.85rem;">' + r.from_username + '</div>';
+
+      html += '<div style="font-size:0.65rem;color:' + fc + ';">' + getFactionName(r.from_faction || 'military') + (r.from_citizen_id ? ' · <span style="color:var(--gold);font-family:var(--font-mono);">' + r.from_citizen_id + '</span>' : '') + '</div>';
+
+      html += '</div>';
+
+      html += '<button class="btn btn-sm btn-gold" style="font-size:0.72rem;" onclick="acceptFriendRequest(\'' + r.id + '\')">通过</button>';
+
+      html += '<button class="btn btn-sm" style="font-size:0.72rem;color:var(--red);border-color:var(--red);" onclick="rejectFriendRequest(\'' + r.id + '\')">拒绝</button>';
+
+      html += '</div>';
+
+    });
+
+    html += '</div>';
+
+  }
+
+  if (sent.length > 0) {
+
+    html += '<div class="card" style="padding:1rem;margin-bottom:0.8rem;">';
+
+    html += '<div style="font-size:0.8rem;color:var(--text-dim);font-family:var(--font-mono);margin-bottom:0.5rem;">📤 我发出的申请</div>';
+
+    sent.forEach(function(r) {
+
+      let st, stc;
+
+      if (r.status === 'pending') { st = '等待通过'; stc = 'var(--gold)'; }
+
+      else if (r.status === 'accepted') { st = '已通过'; stc = '#44aa66'; }
+
+      else { st = '已拒绝'; stc = 'var(--red)'; }
+
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-top:1px solid var(--border-color);font-size:0.8rem;">';
+
+      html += '<span>' + r.to_username + '</span>';
+
+      html += '<span style="color:' + stc + ';font-size:0.72rem;">' + st + '</span>';
+
+      html += '</div>';
+
+    });
+
+    html += '</div>';
+
+  }
+
+  el.innerHTML = html;
+
+};
+
+syncFriendshipsFromCloud = async function() {
+
+  const me = await getMyAuthInfo();
+
+  if (!me) return;
+
+  const { data: _fs, error: _fsErr } = await supabaseClient
+
+    .from(SB_TABLES.friendships).select('*').eq('user_id', me.userId);
+
+  if (!_fsErr && _fs) {
+
+    _fs.forEach(function(row) {
+
+      addFriend({
+
+        id: row.friend_username,
+
+        type: 'user',
+
+        name: row.friend_username,
+
+        faction: row.friend_faction || 'military',
+
+        avatar: (row.friend_username || 'A').charAt(0).toUpperCase(),
+
+        citizenId: row.friend_citizen_id || ''
+
+      });
+
+    });
+
+  }
+
+  const { data: _acc, error: _accErr } = await supabaseClient
+
+    .from(SB_TABLES.friendRequests)
+
+    .select('*')
+
+    .eq('from_user_id', me.userId)
+
+    .eq('status', 'accepted');
+
+  if (!_accErr && _acc && _acc.length > 0) {
+
+    for (let _ai = 0; _ai < _acc.length; _ai++) {
+
+      const r = _acc[_ai];
+
+      let _fc2 = 'military', _cid2 = '';
+
+      try {
+
+        const { data: _tp } = await supabaseClient.from(SB_TABLES.profiles).select('citizen_id, faction').eq('user_id', r.to_user_id).maybeSingle();
+
+        if (_tp) { _fc2 = _tp.faction || 'military'; _cid2 = _tp.citizen_id || ''; }
+
+      } catch(_e4) {}
+
+      addFriend({ id: r.to_username, type: 'user', name: r.to_username, faction: _fc2, avatar: (r.to_username || 'A').charAt(0).toUpperCase(), citizenId: _cid2 });
+
+      await supabaseClient.from(SB_TABLES.friendships).upsert({
+
+        user_id: me.userId,
+
+        friend_user_id: r.to_user_id,
+
+        friend_username: r.to_username,
+
+        friend_citizen_id: _cid2,
+
+        friend_faction: _fc2
+
+      }, { onConflict: 'user_id,friend_username' });
+
+    }
+
+  }
+
+};
+
+removeFriendshipFromCloud = async function(friendUsername) {
+
+  try {
+
+    const me = await getMyAuthInfo();
+
+    if (!me) return;
+
+    await supabaseClient.from(SB_TABLES.friendships)
+
+      .delete()
+
+      .eq('user_id', me.userId)
+
+      .eq('friend_username', friendUsername);
+
+  } catch(e) {}
+
+};
+
+// 登录后检测待处理好友申请并提示（每次会话一次）
+
+let _frCheckDone = false;
+
+setInterval(function() {
+
+  if (_frCheckDone) return;
+
+  const ma = document.getElementById('main-app');
+
+  if (STATE.currentUser && ma && ma.classList.contains('active')) {
+
+    _frCheckDone = true;
+
+    setTimeout(async function() {
+
+      try {
+
+        const _reqs = await loadReceivedFriendRequests();
+
+        if (_reqs.length > 0) {
+
+          showToast('📩 你有 ' + _reqs.length + ' 条好友申请待处理', 'info');
+
+        }
+
+      } catch(_e5) {}
+
+    }, 5000);
+
+  }
+
+}, 2000);
 
 </script>
 
